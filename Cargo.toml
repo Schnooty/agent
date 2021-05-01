@@ -5,7 +5,7 @@ authors = ["Mate Antunovic <mate@schnooty.com>"]
 edition = "2018"
 
 [dependencies]
-openapi_client = { path = "../api/rust" }
+openapi_client = { git = "https://github.com/Schnooty/api" }
 hyper = "0.12.25"
 reqwest = { version = "0.10.6", features = ["json"] }
 tokio = { version = "^0.2", features = ["full"] }
@@ -15,7 +15,6 @@ serde_json = "^1.0.41"
 chrono = "0.4"
 log = "0.4.6"
 sysinfo = "0.16.3"
-shapes = { path = "../shapes/" }
 tokio-timer = "0.2.11"
 hyper-tls = "0.3.2"
 toml = "0.5.3"
