@@ -1,0 +1,33 @@
+[package]
+name = "schnooty"
+version = "0.1.0"
+authors = ["Mate Antunovic <mate@schnooty.com>"]
+edition = "2018"
+
+[dependencies]
+openapi_client = { path = "../api/rust" }
+hyper = "0.12.25"
+reqwest = { version = "0.10.6", features = ["json"] }
+tokio = { version = "^0.2", features = ["full"] }
+futures = "0.3.5"
+serde = { version = "1.0.90", features = ["derive"] }
+serde_json = "^1.0.41"
+chrono = "0.4"
+log = "0.4.6"
+sysinfo = "0.16.3"
+shapes = { path = "../shapes/" }
+tokio-timer = "0.2.11"
+hyper-tls = "0.3.2"
+toml = "0.5.3"
+env_logger = "*"
+rand = "0.7.3"
+actix = "0.10.0-alpha.3"
+actix-rt = "1.1.1"
+test-logger = "0.1.0"
+num_cpus = "1.13.0"
+hostname = "0.3.1"
+lettre = "0.9.5"
+lazy_static = "1.4.0"
+native-tls = "0.2.6"
+lettre_email = "0.9.4"
+async-std = "1.9.0"
