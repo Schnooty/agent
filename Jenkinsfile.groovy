@@ -1,4 +1,4 @@
-def AGENT_DIR = "./mon/"
+def AGENT_DIR = "./"
 def GITHUB_CLIENT_URL = "https://github.com/cli/cli/releases/download/v1.9.2/gh_1.9.2_linux_amd64.tar.gz"
 def GITHUB_CLIENT_TAR = "gh_1.9.2_linux_amd64.tar.gz"
 def GITHUB_CLIENT_PATH = "gh_1.9.2_linux_amd64/bin/gh"
