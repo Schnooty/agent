@@ -36,7 +36,7 @@ Ensure that you set up the `api_key` property in `config.toml`. You need this fo
 from `api.schnooty.com`.
 
 ```
-cat 'api_key="YOUR_API_KEY_HERE" > config.toml'
+cat 'api_key="YOUR_API_KEY_HERE"' > config.toml
 ```
 
 Ensure that `config.toml` is in the same directory as the `schnooty` executable. Then run it
