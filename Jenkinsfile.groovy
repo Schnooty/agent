@@ -40,8 +40,7 @@ pipeline {
 
             if (isReleaseBuild()) {
               def version = sh(script: 'cargo get version', returnStdout: true).trim()
-              def sha = env.GIT_COMMIT.substring(0, 8)
-              def releaseFilename = "schnooty-agent-linux-x64-64-${version}-${sha}.tar";
+              def releaseFilename = "schnooty-agent-linux-x64-64-${version}.tar";
               sh "cp target/x86_64-unknown-linux-gnu/release/schnooty schnooty"
               sh "tar cf ${releaseFilename} schnooty README.md config.toml"
             } else {
@@ -69,8 +68,7 @@ pipeline {
               sh "echo \$TOKEN | ${GITHUB_CLIENT} auth login --with-token"
 
               def cargoVersion = sh(script: 'cargo get version', returnStdout: true).trim()
-              def sha = env.GIT_COMMIT.substring(0, 8)
-              def gitVersion = "${cargoVersion}-${sha}"
+              def gitVersion = "${cargoVersion}"
 
               sh "${GITHUB_CLIENT} release create -p ${gitVersion} ./*.tar"
             }
