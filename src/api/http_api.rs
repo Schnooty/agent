@@ -59,7 +59,7 @@ impl Api for HttpApi {
         let (agent_id, password) = self.get_basic_auth();
         debug!("Getting monitors");
 
-        let uri = format!("{}monitors", self.config.base_uri.to_string());
+        let uri = format!("{}monitors", self.config.base_url.to_string());
 
         let client = Client::new()
             .get(&uri)
@@ -95,7 +95,7 @@ impl Api for HttpApi {
         let (agent_id, password) = self.get_basic_auth();
         debug!("Getting monitors");
 
-        let uri = format!("{}alerts", self.config.base_uri.to_string());
+        let uri = format!("{}alerts", self.config.base_url.to_string());
 
         let client = Client::new()
             .get(&uri)
@@ -134,7 +134,7 @@ impl Api for HttpApi {
 
         let uri = format!(
             "{}session/{}",
-            self.config.base_uri.to_string(),
+            self.config.base_url.to_string(),
             group_id
         );
 
@@ -208,7 +208,7 @@ impl Api for HttpApi {
 
         debug!("Uploading {} monitor status(es)", statuses.len());
 
-        let uri = format!("{}statuses", self.config.base_uri.to_string());
+        let uri = format!("{}statuses", self.config.base_url.to_string());
 
         let body = models::MonitorStatusArray {
             statuses

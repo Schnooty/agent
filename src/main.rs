@@ -1,5 +1,6 @@
 #![deny(warnings)]
 extern crate chrono;
+extern crate clap;
 extern crate env_logger;
 extern crate futures;
 extern crate hyper;
@@ -31,6 +32,7 @@ mod api;
 mod alerts;
 mod config;
 
+use clap::{AppSettings, Clap};
 use actix::clock::Duration;
 use actix::clock::delay_for;
 use crate::actix::Actor;
@@ -40,28 +42,75 @@ use crate::config::Config;
 use std::fs::File;
 use std::io::Read;
 
+#[derive(Clap, Debug)]
+#[clap(version = "0.1.1", author = "Mate Antunovic <mate AT schnooty.com>")]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct Opts {
+    /// Relative path to the agent config file (in TOML) format.
+    #[clap(long)]
+    config: Option<String>,
+    /// Agent API key which will be used to authenticate with the Schnooty API.
+    #[clap(long)]
+    api_key: Option<String>,
+    /// Base URL of Schnooty API or a custom API (for overriding).
+    #[clap(long)]
+    base_url: Option<String>,
+    #[clap(long)]
+    /// Override the default 'main' group ID. Agents in with the group ID divide monitors between themselves.
+    group_id: Option<String>,
+}
+
 #[actix_rt::main]
 async fn main() {
-    if !env_logger::init().is_ok() {
-        println!("Failed to initialise the logged. Stopping");
+    let opts: Opts = Opts::parse();
+
+    let mut base_config: Config = if let Some(ref config_file_path) = &opts.config {
+        println!("Loading config from {}", config_file_path);
+
+        let mut file = match File::open(&config_file_path) {
+            Ok(f) => f,
+            Err(err) => {
+                println!("Error loading config from {}: {}", config_file_path, err);
+                return;
+            }
+        };
+        let mut contents = String::new();
+
+        match file.read_to_string(&mut contents) {
+            Ok(_) => {},
+            Err(err) => {
+                println!("Failed to load file at {}: {}", config_file_path, err);
+                return;
+            }
+        };
+    
+        match toml::from_str(&contents) {
+            Ok(c) => c,
+            Err(err) => {
+                println!("Failed to parse config file at {}: {}", config_file_path, err);
+                return;
+            }
+        }
+    } else {
+        Default::default()
+    };
+
+    base_config.base_url = opts.base_url.unwrap_or(base_config.base_url);
+    base_config.api_key = opts.api_key.unwrap_or(base_config.api_key);
+    base_config.group_id = opts.group_id.unwrap_or(base_config.group_id);
+
+    if base_config.api_key.len() == 0 {
+        println!("An API key is required to start Schnooty Agent");
+        println!("Supply one with the '--api-key' option or use a config TOML file with '--config'");
+        return;
     }
 
-    let config_file_path = "config.toml";
+    let config = base_config;
 
-    info!("Starting the monitor agent");
-    info!("Loading config from {}", config_file_path);
-
-    let mut file = File::open(config_file_path).unwrap();
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).unwrap();
-
-    debug!("Loaded config successfully. Parsing contents");
-
-    let config: Config = toml::from_str(&contents).unwrap();
     let http_api = HttpApi::new(&config);
-    let base_uri = config.base_uri.clone().parse::<hyper::Uri>().unwrap();
+    let base_url = config.base_url.clone().parse::<hyper::Uri>().unwrap();
 
-    info!("Base URL is: {}", base_uri);
+    info!("Base URL is: {}", base_url);
 
     let group_id = config.group_id;
     let api_key = config.api_key;
@@ -73,6 +122,12 @@ async fn main() {
             return;
         }
     };
+
+    println!("Starting Schnooty Agent");
+
+    if !env_logger::init().is_ok() {
+        println!("Failed to initialise the logger. Stopping");
+    }
 
     debug!("Starting the Actix system");
 

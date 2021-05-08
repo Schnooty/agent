@@ -1,11 +1,12 @@
 [package]
 name = "schnooty"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Mate Antunovic <mate@schnooty.com>"]
 edition = "2018"
 
 [dependencies]
 openapi_client = { git = "https://github.com/Schnooty/api" }
+clap = "3.0.0-beta.2"
 hyper = "0.12.25"
 reqwest = { version = "0.10.6", features = ["json"] }
 tokio = { version = "^0.2", features = ["full"] }
