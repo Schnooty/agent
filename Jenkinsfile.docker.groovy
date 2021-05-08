@@ -22,7 +22,7 @@ pipeline {
 
       stage("Push the image to Docker Hub") {
         steps {
-          sh "echo $TOKEN | docker login schnooty --password-stdin"
+          sh "echo \$TOKEN | docker login schnooty --password-stdin"
           sh "docker push schnooty:${params.VERSION}"
         }
       }
