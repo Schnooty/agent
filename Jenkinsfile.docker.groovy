@@ -1,7 +1,9 @@
 pipeline {
     agent any
-    parameters {
+    environment {
         TOKEN=credentials("docker-hub-access-token")
+    }
+    parameters {
         string(name: 'TAR_URL', description: 'Where do I download the Schnooty agent from?')
         string(name: 'VERSION', description: 'What will the Docker tag be?')
     }
