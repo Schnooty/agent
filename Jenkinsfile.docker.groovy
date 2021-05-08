@@ -1,5 +1,8 @@
 pipeline {
     agent any
+    options {
+        ansiColor('xterm')
+    }
     environment {
         TOKEN=credentials("docker-hub-access-token")
     }
