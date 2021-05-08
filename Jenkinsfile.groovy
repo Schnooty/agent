@@ -70,7 +70,7 @@ pipeline {
               def cargoVersion = sh(script: 'cargo get version', returnStdout: true).trim()
               def gitVersion = "${cargoVersion}"
 
-              sh "${GITHUB_CLIENT} release create -p ${gitVersion} ./*.tar"
+              sh "${GITHUB_CLIENT} release create --notes-file RELEASE_NOTES.md -p ${gitVersion} ./*.tar"
             }
           }
         }
