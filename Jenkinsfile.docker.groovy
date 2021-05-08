@@ -1,0 +1,28 @@
+pipeline {
+    agent any
+    parameters {
+        TOKEN=credentials("docker-hub-access-token")
+        string(name: 'TAR_URL', description: 'Where do I download the Schnooty agent from?')
+        string(name: 'VERSION', description: 'What will the Docker tag be?')
+    }
+    stages {
+      stage("Build Docker image") {
+        steps {
+          sh "docker build --build-arg LINUX_RELEASE_TAR_URL=${LINUX_RELEASE_TAR_URL} . -t schnooty"
+        }
+      }
+      
+      stage("Tag the release image") {
+        steps {
+          sh "docker tag schnooty:latest schnooty:${VERSION}"
+        }
+      }
+
+      stage("Push the image to Docker Hub") {
+        steps {
+          sh "echo $TOKEN | docker login schnooty --password-stdin"
+          sh "docker push schnooty:${VERSION}"
+        }
+      }
+    }
+}
