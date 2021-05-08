@@ -10,7 +10,6 @@ pipeline {
     stages {
       stage("Build Docker image") {
         steps {
-          sh "Using the image from ${params.LINUX_RELEASE_TAR_URL}"
           sh "docker build --build-arg LINUX_RELEASE_TAR_URL=${params.LINUX_RELEASE_TAR_URL} . -t schnooty"
         }
       }
