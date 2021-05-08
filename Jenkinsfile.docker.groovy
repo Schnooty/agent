@@ -4,12 +4,13 @@ pipeline {
         TOKEN=credentials("docker-hub-access-token")
     }
     parameters {
-        string(name: 'TAR_URL', description: 'Where do I download the Schnooty agent from?')
+        string(name: 'LINUX_RELEASE_TAR_URL', description: 'Where do I download the Schnooty agent from?')
         string(name: 'VERSION', description: 'What will the Docker tag be?')
     }
     stages {
       stage("Build Docker image") {
         steps {
+          sh "Using the image from ${params.LINUX_RELEASE_TAR_URL}"
           sh "docker build --build-arg LINUX_RELEASE_TAR_URL=${params.LINUX_RELEASE_TAR_URL} . -t schnooty"
         }
       }
