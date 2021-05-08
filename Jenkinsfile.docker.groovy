@@ -13,13 +13,13 @@ pipeline {
     stages {
       stage("Build Docker image") {
         steps {
-          sh "docker build --no-cache --build-arg LINUX_RELEASE_TAR_URL=${params.LINUX_RELEASE_TAR_URL} . -t schnooty"
+          sh "docker build --no-cache --build-arg LINUX_RELEASE_TAR_URL=${params.LINUX_RELEASE_TAR_URL} . -t schnooty/schnooty"
         }
       }
       
       stage("Tag the release image") {
         steps {
-          sh "docker tag schnooty:latest schnooty:${params.VERSION}"
+          sh "docker tag schnooty/schnooty:latest schnooty/schnooty:${params.VERSION}"
         }
       }
 
