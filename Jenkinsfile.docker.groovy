@@ -10,20 +10,20 @@ pipeline {
     stages {
       stage("Build Docker image") {
         steps {
-          sh "docker build --build-arg LINUX_RELEASE_TAR_URL=${LINUX_RELEASE_TAR_URL} . -t schnooty"
+          sh "docker build --build-arg LINUX_RELEASE_TAR_URL=${params.LINUX_RELEASE_TAR_URL} . -t schnooty"
         }
       }
       
       stage("Tag the release image") {
         steps {
-          sh "docker tag schnooty:latest schnooty:${VERSION}"
+          sh "docker tag schnooty:latest schnooty:${params.VERSION}"
         }
       }
 
       stage("Push the image to Docker Hub") {
         steps {
           sh "echo $TOKEN | docker login schnooty --password-stdin"
-          sh "docker push schnooty:${VERSION}"
+          sh "docker push schnooty:${params.VERSION}"
         }
       }
     }
