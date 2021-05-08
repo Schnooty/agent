@@ -11,8 +11,12 @@ RUN pwd
 RUN tar xf agent_tar.tar
 
 FROM ubuntu:18.04
+
 RUN apt-get update
 RUN apt-get install -yq libssl-dev
+
 COPY --from=builder /schnooty .
 
-CMD ["./schnooty"]
+ENV API_KEY
+
+CMD ["./schnooty", "--api-key", "${API_KEY}"]
