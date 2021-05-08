@@ -1,6 +1,6 @@
 [package]
 name = "schnooty"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Mate Antunovic <mate@schnooty.com>"]
 edition = "2018"
 
