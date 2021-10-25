@@ -34,10 +34,10 @@ impl AlerterActor {
         self.status_buffer.sort_by(|s1, s2| s1.1.timestamp.cmp(&s2.1.timestamp));
 
         for (monitor, status) in self.status_buffer.iter() {
-            if !self.statuses.contains_key(&status.monitor_id) {
-                self.statuses.insert(status.monitor_id.clone(), MonitorState::new(monitor, status));
+            if !self.statuses.contains_key(&status.status_id) {
+                self.statuses.insert(status.status_id.clone(), MonitorState::new(monitor, status));
             }
-            match self.statuses.get_mut(&status.monitor_id) {
+            match self.statuses.get_mut(&status.monitor_name) {
                 Some(ref mut current_state) => {
                     let is_down = status.status == models::MonitorStatusIndicator::DOWN;
 
@@ -47,8 +47,8 @@ impl AlerterActor {
                     };
 
                     if state_changed || (is_down && current_state.is_new) {
-                        info!("Detected monitor state change (monitor_id={}, previous_statues={}, current_state={})",
-                            status.monitor_id, current_state.last_status.status, status.status); 
+                        info!("Detected monitor state change (monitor_name={}, previous_statues={}, current_state={})",
+                            status.monitor_name, current_state.last_status.status, status.status); 
 
                         current_state.is_new = false;
                         current_state.last_status = status.clone();
@@ -56,7 +56,7 @@ impl AlerterActor {
                         perform_state_change_action(&mut *self.api, &current_state, ctx, &self.alerts);
                     }
                 },
-                None => unreachable!("Could not load status that was just inserted (monitor_id={})", status.monitor_id)
+                None => unreachable!("Could not load status that was just inserted (monitor_name={})", status.monitor_name)
             }
         }
 
@@ -69,8 +69,8 @@ impl AlerterActor {
 fn perform_state_change_action(api: &mut dyn AlertApi, state: &MonitorState, ctx: &mut <AlerterActor as Actor>::Context, alerts: &[models::Alert]) {
     let status = &state.last_status;
     let payload = AlertPayload {
-        monitor_id: status.monitor_id.to_owned(),
-        monitor_name: state.monitor.name.to_owned(),
+        monitor_name: status.monitor_name.to_owned(),
+        //monitor_name: state.monitor.name.to_owned(),
         status: status.clone(),
         node_info: get_node_info()
     };
@@ -115,7 +115,7 @@ impl Handler<StatusMsg> for AlerterActor {
     type Result = Result<(), Error>;
 
     fn handle(&mut self, msg: StatusMsg, ctx: &mut Self::Context) -> Self::Result {
-        debug!("Received status update(s) (monitor_id={}, status={}", msg.monitor.id.clone().unwrap(), msg.status.status);
+        debug!("Received status update(s) (monitor_name={}, status={}", msg.monitor.id.clone().unwrap(), msg.status.status);
         self.status_buffer.push((msg.monitor, msg.status));
         self.process_state_change(ctx);
 
@@ -124,11 +124,11 @@ impl Handler<StatusMsg> for AlerterActor {
 }
 
 impl MonitorState {
-    fn new(monitor: &models::Monitor, last_status: &models::MonitorStatus) -> Self {
+    fn new(_monitor: &models::Monitor, last_status: &models::MonitorStatus) -> Self {
         Self {
             last_timestamp: Utc::now(), // TODO
             last_status: last_status.clone(),
-            monitor: monitor.clone(),
+            //monitor: monitor.clone(),
             is_new: true
         }
     }
@@ -137,7 +137,7 @@ impl MonitorState {
 struct MonitorState {
     last_timestamp: DateTime<Utc>,
     last_status: models::MonitorStatus,
-    monitor: models::Monitor,
+    //monitor: models::Monitor,
     is_new: bool
 }
 

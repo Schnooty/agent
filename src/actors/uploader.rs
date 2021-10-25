@@ -59,10 +59,10 @@ impl UploaderActor {
         // filter out the most recent results
         let statuses: Vec<_> = buffer.into_iter()
             .filter(|status| {
-                if already_seen.contains(&status.monitor_id) {
+                if already_seen.contains(&status.monitor_name) {
                     false
                 } else {
-                    already_seen.insert(status.monitor_id.clone());
+                    already_seen.insert(status.monitor_name.clone());
                     true
                 }
             })
@@ -101,7 +101,7 @@ impl Handler<StatusMsg> for UploaderActor {
     type Result = Result<(), Error>;
 
     fn handle(&mut self, msg: StatusMsg, ctx: &mut Self::Context) -> Self::Result {
-        debug!("Status received (monitor_id={})", msg.status.monitor_id);
+        debug!("Status received (monitor_name={})", msg.status.monitor_name);
         self.buffer.push(msg.status);
         debug!("Message added to buffer (buffer_len={})", self.buffer.len());
         self.ensure_upload(ctx);

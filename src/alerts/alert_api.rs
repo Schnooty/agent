@@ -54,8 +54,8 @@ impl AlertApi for AlertApiImpl {
                     },
                     payload.monitor_name
             ));
-            email_body.push_str(&format!("Got result: {}\n", payload.status.last_result.actual));
-            email_body.push_str(&format!("Expected result: {}\n\n", payload.status.last_result.expected));
+            email_body.push_str(&format!("Got result: {}\n", payload.status.actual_result));
+            email_body.push_str(&format!("Expected result: {}\n\n", payload.status.expected_result));
             email_body.push_str(&format!("Description: {}\n", payload.status.description));
             email_body.push_str(&format!("Timestamp: {}\n", timestamp));
             email_body.push_str(&format!("Hostname: {}\n", payload.node_info.hostname));
@@ -63,15 +63,15 @@ impl AlertApi for AlertApiImpl {
             email_body.push_str(&format!("CPU info: {}\n", payload.node_info.cpu));
             email_body.push_str(&format!("RAM info: {}\n\n", payload.node_info.ram));
 
-            if let Some(logs) = payload.status.log {
-                if logs.len() > 0 {
-                    email_body.push_str("Monitor log below\n");
-                    for log in logs.iter() {
-                        let timestamp: DateTime<Utc> = log.timestamp;
-                        email_body.push_str(&format!("{}: {}\n", timestamp, log.value));
-                    }
-                    email_body.push_str("\n\n");
+            let logs = payload.status.log;
+
+            if logs.len() > 0 {
+                email_body.push_str("Monitor log below\n");
+                for log in logs.iter() {
+                    let timestamp: DateTime<Utc> = log.timestamp;
+                    email_body.push_str(&format!("{}: {}\n", timestamp, log.value));
                 }
+                email_body.push_str("\n\n");
             }
 
             email_body.push_str("You can view your monitors by logging in at www.openmonitors.com\n");
@@ -182,7 +182,6 @@ impl AlertApi for AlertApiImpl {
 
 #[derive(Clone, Debug)]
 pub struct AlertPayload {
-    pub monitor_id: String,
     pub monitor_name: String,
     pub status: models::MonitorStatus,
     pub node_info: NodeInfo

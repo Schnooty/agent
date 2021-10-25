@@ -1,17 +1,23 @@
-use chrono::Duration;
 use chrono::Utc;
+use chrono::DateTime;
 use crate::api::{Api, ApiFuture};
 use crate::error::Error;
-use crate::config::Config;
 use openapi_client::models;
-use crate::api::AgentSessionState;
+use hostname::get as get_hostname;
 
 use reqwest::Client;
 use std::time::Duration as StdDuration;
 
+#[derive(Clone)]
+pub struct HttpConfig {
+    pub base_url: String,
+    pub api_key: Option<String>
+}
+
 pub struct HttpApi {
-    config: Config,
+    config: HttpConfig,
     options: HttpApiOptions,
+    started_at: DateTime<Utc>,
 }
 
 #[derive(Debug)]
@@ -29,10 +35,11 @@ impl Default for HttpApiOptions {
 
 #[allow(dead_code)]
 impl HttpApi {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &HttpConfig) -> Self {
         Self {
-            config: config.to_owned(),
-            options: Default::default()
+            config: config.clone(),
+            options: Default::default(),
+            started_at: Utc::now()
         }
     }
 
@@ -40,31 +47,40 @@ impl HttpApi {
         self.options = options;
     }
 
-    fn get_basic_auth(&self) -> (String, Option<String>) {
-        let mut iter = self.config.api_key.split(':');
-        let username: String = match iter.next() {
-            Some(ref u) => u.to_string(),
-            None => String::new()
-        };
-        let password: String = match iter.next() {
-            Some(ref p) => p.to_string(),
-            None => String::new()
-        };
-        (username, Some(password))
+    fn get_basic_auth(&self) -> Option<(String, Option<String>)> {
+        match &self.config.api_key {
+            Some(ref api_key) => {
+                let mut iter = api_key.split(':');
+                let username: String = match iter.next() {
+                    Some(ref u) => u.to_string(),
+                    None => String::new()
+                };
+                let password: String = match iter.next() {
+                    Some(ref p) => p.to_string(),
+                    None => String::new()
+                };
+                Some((username, Some(password)))
+            },
+            None => None
+        }
     }
 }
 
 impl Api for HttpApi {
     fn get_monitors(&self) -> ApiFuture<Vec<models::Monitor>> {
-        let (agent_id, password) = self.get_basic_auth();
+        let basic_auth = self.get_basic_auth();
         debug!("Getting monitors");
 
         let uri = format!("{}monitors", self.config.base_url.to_string());
 
-        let client = Client::new()
-            .get(&uri)
-            .basic_auth(&agent_id, password)
-            .timeout(StdDuration::from_secs(self.options.timeout_seconds));
+        let mut client = Client::new()
+            .get(&uri);
+
+        if let Some((agent_id, password)) = basic_auth {
+            client = client.basic_auth(&agent_id, password);
+        }
+            
+        client = client.timeout(StdDuration::from_secs(self.options.timeout_seconds));
 
         Box::pin(async {
             let response_result = client.send().await;
@@ -92,15 +108,17 @@ impl Api for HttpApi {
     }
 
     fn get_alerts(&self) -> ApiFuture<Vec<models::Alert>> {
-        let (agent_id, password) = self.get_basic_auth();
+        let basic_auth  = self.get_basic_auth();
         debug!("Getting monitors");
 
         let uri = format!("{}alerts", self.config.base_url.to_string());
 
-        let client = Client::new()
-            .get(&uri)
-            .basic_auth(&agent_id, password)
-            .timeout(StdDuration::from_secs(self.options.timeout_seconds));
+        let mut client = Client::new()
+            .get(&uri);
+        if let Some((agent_id, password)) = basic_auth {
+            client = client.basic_auth(&agent_id, password);
+        }
+        client = client.timeout(StdDuration::from_secs(self.options.timeout_seconds));
 
         Box::pin(async {
             let response_result = client.send().await;
@@ -124,32 +142,49 @@ impl Api for HttpApi {
         })
     }
 
-    fn post_heartbeat(&mut self, group_id: &str, session_id: &str) -> ApiFuture<AgentSessionState> {
-        let (agent_id, password) = self.get_basic_auth();
+    fn post_heartbeat(&mut self, group_id: &str, session_name: &str) -> ApiFuture<models::Session> {
+        let basic_auth = self.get_basic_auth();
 
         debug!(
-            "Posting heartbeat for session {} in group {}",
-            session_id, group_id
+            "Posting heartbeat (session_name={})",
+            session_name
         );
 
         let uri = format!(
-            "{}session/{}",
+            "{}sessions/{}",
             self.config.base_url.to_string(),
             group_id
         );
 
-        debug!("Building heartbeat request (uri={}, agent_id={}, password={:?})", uri, agent_id, password);
+        debug!("Building heartbeat request (uri={})", uri);
 
-        let client = Client::new()
-            .post(&uri)
-            .basic_auth(&agent_id, password)
-            .json(&models::AgentSessionRequest {
-                session_id: session_id.to_owned(),
-                is_new: Some(true),
+        let mut client = Client::new()
+            .post(&uri);
+
+        if let Some((agent_id, password)) = basic_auth {
+            client = client.basic_auth(&agent_id, password);
+        }
+
+        let hostname = match get_hostname() {
+            Ok(h) => h.to_string_lossy().into_owned(),
+            Err(e) => format!("Error getting hostname: {}", e)
+        };
+
+        let platform = models::PlatformInfo {
+            os: Some(std::env::consts::OS.to_string()),
+            cpu: None 
+        };
+
+        client = client.json(&models::Session {
+                name: session_name.to_owned(),
+                hostname: Some(hostname),
+                platform: Some(platform),
+                last_updated: Utc::now(),
+                started_at: self.started_at
             })
             .timeout(StdDuration::from_secs(self.options.timeout_seconds));
 
-        let agent_session_id = session_id.to_owned();
+        let _agent_session_id = session_name.to_owned();
 
         Box::pin(async move {
             debug!("Sending heartbeat");
@@ -173,37 +208,17 @@ impl Api for HttpApi {
 
             debug!("Loading JSON data");
 
-            let response_json: Result<models::AgentSessionState, _> = response.json().await;
+            let response_json: Result<models::Session, _> = response.json().await;
 
             match response_json {
-                Ok(r) => {
-                    if let Some(agents) = r.agents {
-                        if let Some(this_agent) = agents
-                            .into_iter().find(|a| a.session_id == agent_session_id)
-                        {
-                            Ok(AgentSessionState {
-                                agent_session_id,
-                                monitors: this_agent
-                                    .monitor_ids
-                                    .into_iter()
-                                    .map(|s| s.to_string())
-                                    .collect(),
-                                heartbeat_due_by: Utc::now() + Duration::minutes(2),
-                            })
-                        } else {
-                            Err(Error::new("Could not find this agent in the list from API"))
-                        }
-                    } else {
-                        Err(Error::new("Could not find this agent in the list from API"))
-                    }
-                }
+                Ok(r) => Ok(r),
                 Err(e) => Err(Error::new(format!("Agent failed to load the agent list from API: {}", e)))
             }
         })
     }
 
     fn post_statuses(&mut self, statuses: &[models::MonitorStatus]) -> ApiFuture<()> {
-        let (agent_id, password) = self.get_basic_auth();
+        let basic_auth = self.get_basic_auth();
         let statuses: Vec<_> = statuses.to_vec();
 
         debug!("Uploading {} monitor status(es)", statuses.len());
@@ -214,9 +229,12 @@ impl Api for HttpApi {
             statuses
         };
 
-        let client = Client::new()
-            .post(&uri)
-            .basic_auth(&agent_id, password)
+        let mut client = Client::new()
+            .post(&uri);
+        if let Some((agent_id, password)) = basic_auth {
+            client = client.basic_auth(&agent_id, password);
+        }
+        client = client
             .json(&body)
             .timeout(StdDuration::from_secs(self.options.timeout_seconds));
 

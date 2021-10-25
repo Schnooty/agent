@@ -3,7 +3,6 @@ use crate::error::Error;
 use actix::prelude::ResponseFuture;
 use actix::prelude::*;
 use openapi_client::models;
-use crate::api::AgentSessionState;
 
 use std::marker::Unpin;
 //use std::pin::Pin;
@@ -27,7 +26,7 @@ impl<A: Api + Unpin + 'static> Actor for ApiActor<A> {
 pub struct GetMonitors;
 
 #[derive(Message)]
-#[rtype(result = "Result<AgentSessionState, Error>")]
+#[rtype(result = "Result<models::Session, Error>")]
 pub struct SessionHeartbeat {
     pub group_id: String,
     pub session_id: String,
@@ -52,7 +51,7 @@ impl<A: Api + Unpin + 'static> Handler<GetAlerts> for ApiActor<A> {
 }
 
 impl<A: Api + Unpin + 'static> Handler<SessionHeartbeat> for ApiActor<A> {
-    type Result = ResponseActFuture<Self, Result<AgentSessionState, Error>>;
+    type Result = ResponseActFuture<Self, Result<models::Session, Error>>;
 
     fn handle(&mut self, msg: SessionHeartbeat, _ctx: &mut Self::Context) -> Self::Result {
         Box::pin(

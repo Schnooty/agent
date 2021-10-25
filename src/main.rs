@@ -24,6 +24,7 @@ extern crate lazy_static;
 extern crate native_tls;
 extern crate lettre_email;
 extern crate async_std;
+extern crate redis;
 
 mod error;
 mod monitoring;
@@ -58,6 +59,12 @@ struct Opts {
     #[clap(long)]
     /// Override the default 'main' group ID. Agents in with the group ID divide monitors between themselves.
     group_id: Option<String>,
+    #[clap(long)]
+    /// Monitor file
+    monitors_file: Option<String>,
+    #[clap(long)]
+    /// Agents file
+    alerts_file: Option<String>
 }
 
 #[actix_rt::main]
@@ -95,33 +102,55 @@ async fn main() {
         Default::default()
     };
 
-    base_config.base_url = opts.base_url.unwrap_or(base_config.base_url);
-    base_config.api_key = opts.api_key.unwrap_or(base_config.api_key);
+    base_config.base_url = if opts.base_url.is_some() { opts.base_url } else { base_config.base_url };
+    base_config.api_key = if opts.api_key.is_some() { opts.api_key } else { base_config.api_key };
     base_config.group_id = opts.group_id.unwrap_or(base_config.group_id);
+    base_config.monitor_file = if opts.monitors_file.is_some() { opts.monitors_file } else { None };
+    base_config.alert_file = if opts.alerts_file.is_some() { opts.alerts_file } else { None };
 
-    if base_config.api_key.len() == 0 {
-        println!("An API key is required to start Schnooty Agent");
+    if base_config.api_key.is_none() {
+        println!("You have started Schnooty without an API key. This is required to communicate with Schnooty API.");
         println!("Supply one with the '--api-key' option or use a config TOML file with '--config'");
-        return;
     }
 
     let config = base_config;
 
-    let http_api = HttpApi::new(&config);
-    let base_url = config.base_url.clone().parse::<hyper::Uri>().unwrap();
+    let api_addr = match config.base_url {
+        Some(url) => {
+            debug!("Using {} as base URL", url);
+            let api = HttpApi::new(&api::HttpConfig {
+                base_url: url,
+                api_key: config.api_key.clone()
+            });
 
-    info!("Base URL is: {}", base_url);
-
-    let group_id = config.group_id;
-    let api_key = config.api_key;
-
-    let agent_id = match api_key.split(':').next() {
-        Some(ref a) => a.to_owned(),
-        _ => { 
-            error!("Invalid API key: {}", api_key);
-            return;
+            let api_actor = actors::ApiActor::new(api);
+            Some(api_actor.start())
+        },
+        None => {
+            debug!("No base URL supplied. Not going to use API");
+            None
         }
     };
+
+    //let base_url = config.base_url.clone().parse::<hyper::Uri>().unwrap();
+
+    //info!("Base URL is: {}", base_url);
+
+    let group_id = config.group_id;
+    //let api_key = config.api_key;
+
+    let agent_id: String = if let Some(ref api_key) = &config.api_key {
+        match api_key.split(':').next() {
+            Some(ref a) => a.to_owned().to_string(),
+            _ => { 
+                error!("Invalid API key");
+                return;
+            }
+        }
+    } else {
+        "anonymous-agent".to_owned()
+    };
+
 
     println!("Starting Schnooty Agent");
 
@@ -131,19 +160,21 @@ async fn main() {
 
     debug!("Starting the Actix system");
 
-    let api_actor = actors::ApiActor::new(http_api);
-    let api_addr = api_actor.start();
-
-    let uploader = actors::UploaderActor::new(api_addr.clone());
-    let uploader_addr = uploader.start();
-
     let alerter = actors::AlerterActor::new(alerts::AlertApiImpl::new());
     let alerter_addr = alerter.start();
 
-    let status_recipients = vec![
-        uploader_addr.recipient(),
-        alerter_addr.clone().recipient()
-    ];
+    let status_recipients = if let Some(ref api_addr) = &api_addr {
+        let uploader = actors::UploaderActor::new(api_addr.clone());
+        let uploader_addr = uploader.start();
+
+        vec![
+            uploader_addr.recipient(),
+            alerter_addr.clone().recipient()
+        ]
+    } else {
+        info!("No API URL. Statuses will not be uploaded");
+        vec![]
+    };
 
     let monitoring = monitoring::MonitorFutureMaker::new();
 
@@ -153,7 +184,17 @@ async fn main() {
     let scheduler_actor = actors::SchedulerActor::new(executor_addr.recipient());
     let scheduler_addr = scheduler_actor.start();
 
-    let configurator_actor = actors::ConfiguratorActor::new(api_addr.clone(), scheduler_addr, vec![alerter_addr.recipient()]);
+    let monitor_file_addr = match config.monitor_file {
+        Some(p) => Some(actors::FileActor::new(p).start()),
+        None => None
+    };
+
+    let configurator_actor = actors::ConfiguratorActor::new(
+        api_addr.clone(),
+        scheduler_addr,
+        vec![alerter_addr.recipient()],
+        monitor_file_addr
+    );
     let configurator_addr = configurator_actor.start();
 
     let session_actor =

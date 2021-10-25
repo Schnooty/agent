@@ -28,7 +28,7 @@ impl MonitorSource for ProcessMonitor {
                 Some(true) => true,
                 _ => false,
             };
-            let builder = MonitorStatusBuilder::new(monitor_id, Utc::now());
+            let builder = MonitorStatusBuilder::new(monitor_id, models::MonitorType::PROCESS, Utc::now());
 
             let executable_name = match monitor.body.executable {
                 Some(e) => e,

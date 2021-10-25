@@ -33,7 +33,7 @@ impl MonitorSource for HttpMonitor {
                 }
             };
 
-            let status_builder = MonitorStatusBuilder::new(&monitor_id, Utc::now());
+            let status_builder = MonitorStatusBuilder::new(&monitor_id, models::MonitorType::HTTP, Utc::now());
 
             const EXPECTED: &str = "200-level status code";
 

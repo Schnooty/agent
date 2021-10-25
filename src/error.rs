@@ -1,5 +1,8 @@
 use std::error;
 use std::fmt;
+use redis::RedisError;
+use serde_json;
+use std::io;
 
 #[derive(Debug)]
 pub struct Error {
@@ -22,6 +25,30 @@ impl Error {
     pub fn from<E: error::Error>(error: E) -> Self {
         Self {
             description: format!("{}", error)
+        }
+    }
+}
+
+impl From<RedisError> for Error {
+    fn from(err: RedisError) -> Self {
+        Self {
+            description: format!("Redis error: {}", err)
+        }
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Self {
+            description: format!("Serde error: {}", err)
+        }
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        Self {
+            description: format!("IO error: {}", err)
         }
     }
 }

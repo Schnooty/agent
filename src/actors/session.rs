@@ -19,7 +19,7 @@ pub struct AgentGroupInfo {
 pub struct SessionActor {
     agent_group_info: AgentGroupInfo,
     session_id: String,
-    api_addr: Addr<ApiActor<HttpApi>>,
+    api_addr: Option<Addr<ApiActor<HttpApi>>>,
     configurator_addr: Addr<ConfiguratorActor>,
 }
 
@@ -27,7 +27,7 @@ impl SessionActor {
     pub fn new(
         agent_id: &str,
         group_id: &str,
-        api_addr: Addr<ApiActor<HttpApi>>,
+        api_addr: Option<Addr<ApiActor<HttpApi>>>,
         configurator_addr: Addr<ConfiguratorActor>,
     ) -> Self {
         let mut rng = thread_rng();
@@ -46,23 +46,6 @@ impl SessionActor {
             configurator_addr,
         }
     }
-
-    /*pub fn schedule_heartbeat(&mut self, ctx: &mut Context<Self>) {
-        let heartbeat = Heartbeat {
-            session_id: self.session_id.to_owned(),
-        };
-        ctx.run_later(
-            Duration::new(HEARTBEAT_DURATION_SEC, 0),
-            move |act, mut ctx| {
-                act.schedule_heartbeat(&mut ctx);
-
-                ctx.spawn(
-                    actix::fut::wrap_future::<_, Self>(ctx.address().send(heartbeat))
-                        .map(|_, _, _| ()),
-                );
-            },
-        );
-    }*/
 }
 
 #[derive(Clone, Debug, Message)]
@@ -158,6 +141,7 @@ impl Handler<Heartbeat> for SessionActor {
         debug!("agent_id={}", self.agent_group_info.agent_id);
         debug!("group_id={}", self.agent_group_info.group_id);
         debug!("session_id={}", msg.session_id);
+        debug!("DEBUG 1");
 
         let heartbeat = SessionHeartbeat {
             group_id: self.agent_group_info.group_id.to_owned(),
@@ -165,11 +149,41 @@ impl Handler<Heartbeat> for SessionActor {
             session_id: msg.session_id,
         };
 
+        debug!("DEBUG 2");
+
         let config_addr = self.configurator_addr.clone();
 
+        debug!("DEBUG 3");
+
+        let api_addr = match self.api_addr.clone() {
+            Some(a) => a,
+            None => {
+                debug!("No need to generate session");
+                return Box::pin(actix::fut::wrap_future(async move {
+                    match config_addr.send(SessionState {
+                        timestamp: Utc::now(),
+                        agent_session_id: "TODO".to_owned(),
+                        heartbeat_due_by: chrono::Utc::now() + chrono::Duration::minutes(1),
+                    }).await {
+                        Ok(_) => Ok(()),
+                        Err(err) => {
+                            error!("Error sending session state: {}", err);
+                            Err(SessionErr {
+                                error: Some(Box::new(err))
+                            })
+                        }
+                    }
+                }));
+            }
+        };
+
+        debug!("Sending heartbeat to API");
+
         Box::pin(
-            actix::fut::wrap_future::<_, Self>(self.api_addr.send(heartbeat)).then(
+            actix::fut::wrap_future::<_, Self>(api_addr.send(heartbeat)).then(
                 move |result, _actor, _ctx| {
+                    debug!("Sent heartbeat to API");
+                    
                     actix::fut::wrap_future::<_, Self>(async move {
                         match result {
                             Err(err) => {
@@ -185,12 +199,12 @@ impl Handler<Heartbeat> for SessionActor {
                                 Err(SessionErr { error: None })
                             }
                             Ok(Ok(session)) => {
+                                debug!("Sending session state");
                                 let result = config_addr
                                     .send(SessionState {
                                         timestamp: Utc::now(),
-                                        agent_session_id: session.agent_session_id,
-                                        monitors: session.monitors,
-                                        heartbeat_due_by: session.heartbeat_due_by,
+                                        agent_session_id: session.name,
+                                        heartbeat_due_by: Utc::now() + chrono::Duration::minutes(2),
                                     })
                                     .await;
 
