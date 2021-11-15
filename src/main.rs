@@ -1,15 +1,11 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 extern crate chrono;
 extern crate clap;
 extern crate env_logger;
 extern crate futures;
-extern crate hyper;
-extern crate hyper_tls;
 extern crate openapi_client;
-extern crate reqwest;
 extern crate serde_json;
 extern crate sysinfo;
-extern crate tokio_timer;
 extern crate toml;
 #[macro_use]
 extern crate log;
@@ -23,8 +19,12 @@ extern crate hostname;
 extern crate lazy_static;
 extern crate native_tls;
 extern crate lettre_email;
-extern crate async_std;
 extern crate redis;
+extern crate serde_yaml;
+extern crate async_std;
+extern crate http as http_types;
+extern crate async_native_tls;
+extern crate base64;
 
 mod error;
 mod monitoring;
@@ -32,16 +32,17 @@ mod actors;
 mod api;
 mod alerts;
 mod config;
+mod http;
 
 use clap::{AppSettings, Clap};
-use actix::clock::Duration;
-use actix::clock::delay_for;
+use std::time::Duration;
 use crate::actix::Actor;
-use crate::actors::SessionInit;
+use crate::actors::*;
 use crate::api::HttpApi;
-use crate::config::Config;
+use crate::config::*;
 use std::fs::File;
 use std::io::Read;
+
 
 #[derive(Clap, Debug)]
 #[clap(version = "0.1.1", author = "Mate Antunovic <mate AT schnooty.com>")]
@@ -49,81 +50,60 @@ use std::io::Read;
 struct Opts {
     /// Relative path to the agent config file (in TOML) format.
     #[clap(long)]
-    config: Option<String>,
-    /// Agent API key which will be used to authenticate with the Schnooty API.
-    #[clap(long)]
-    api_key: Option<String>,
-    /// Base URL of Schnooty API or a custom API (for overriding).
-    #[clap(long)]
-    base_url: Option<String>,
-    #[clap(long)]
-    /// Override the default 'main' group ID. Agents in with the group ID divide monitors between themselves.
-    group_id: Option<String>,
-    #[clap(long)]
-    /// Monitor file
-    monitors_file: Option<String>,
-    #[clap(long)]
-    /// Agents file
-    alerts_file: Option<String>
+    config: String,
 }
 
 #[actix_rt::main]
 async fn main() {
-    let opts: Opts = Opts::parse();
+    println!("Starting Schnooty Agent");
 
-    let mut base_config: Config = if let Some(ref config_file_path) = &opts.config {
-        println!("Loading config from {}", config_file_path);
-
-        let mut file = match File::open(&config_file_path) {
-            Ok(f) => f,
-            Err(err) => {
-                println!("Error loading config from {}: {}", config_file_path, err);
-                return;
-            }
-        };
-        let mut contents = String::new();
-
-        match file.read_to_string(&mut contents) {
-            Ok(_) => {},
-            Err(err) => {
-                println!("Failed to load file at {}: {}", config_file_path, err);
-                return;
-            }
-        };
-    
-        match toml::from_str(&contents) {
-            Ok(c) => c,
-            Err(err) => {
-                println!("Failed to parse config file at {}: {}", config_file_path, err);
-                return;
-            }
-        }
-    } else {
-        Default::default()
-    };
-
-    base_config.base_url = if opts.base_url.is_some() { opts.base_url } else { base_config.base_url };
-    base_config.api_key = if opts.api_key.is_some() { opts.api_key } else { base_config.api_key };
-    base_config.group_id = opts.group_id.unwrap_or(base_config.group_id);
-    base_config.monitor_file = if opts.monitors_file.is_some() { opts.monitors_file } else { None };
-    base_config.alert_file = if opts.alerts_file.is_some() { opts.alerts_file } else { None };
-
-    if base_config.api_key.is_none() {
-        println!("You have started Schnooty without an API key. This is required to communicate with Schnooty API.");
-        println!("Supply one with the '--api-key' option or use a config TOML file with '--config'");
+    if !env_logger::init().is_ok() {
+        println!("Failed to initialise the logger. Stopping");
+        std::process::exit(1);
     }
 
-    let config = base_config;
+    let opts: Opts = Opts::parse();
+    let config_file_path = &opts.config;
+    info!("Loading config from: {}", config_file_path);
 
-    let api_addr = match config.base_url {
-        Some(url) => {
+    let mut file = match File::open(config_file_path) {
+        Ok(f) => f,
+        Err(err) => {
+            error!("Error loading config from {}: {}", config_file_path, err);
+            std::process::exit(1);
+        }
+    };
+
+    let mut contents = String::new();
+
+    info!("Parsing config");
+
+    match file.read_to_string(&mut contents) {
+        Ok(_) => {},
+        Err(err) => {
+            error!("Failed to load file at {}: {}", config_file_path, err);
+            return;
+        }
+    };
+
+    let config: Config = match serde_yaml::from_str(&contents) {
+        Ok(c) => c,
+        Err(err) => {
+            error!("Failed to parse config file at {}: {}", config_file_path, err);
+            return;
+        }
+    };
+
+    let api_addr = match &config.base_url {
+        Some(ref url) => {
             debug!("Using {} as base URL", url);
             let api = HttpApi::new(&api::HttpConfig {
-                base_url: url,
+                base_url: url.clone(),
                 api_key: config.api_key.clone()
             });
 
             let api_actor = actors::ApiActor::new(api);
+            debug!("Starting the API actor");
             Some(api_actor.start())
         },
         None => {
@@ -131,32 +111,6 @@ async fn main() {
             None
         }
     };
-
-    //let base_url = config.base_url.clone().parse::<hyper::Uri>().unwrap();
-
-    //info!("Base URL is: {}", base_url);
-
-    let group_id = config.group_id;
-    //let api_key = config.api_key;
-
-    let agent_id: String = if let Some(ref api_key) = &config.api_key {
-        match api_key.split(':').next() {
-            Some(ref a) => a.to_owned().to_string(),
-            _ => { 
-                error!("Invalid API key");
-                return;
-            }
-        }
-    } else {
-        "anonymous-agent".to_owned()
-    };
-
-
-    println!("Starting Schnooty Agent");
-
-    if !env_logger::init().is_ok() {
-        println!("Failed to initialise the logger. Stopping");
-    }
 
     debug!("Starting the Actix system");
 
@@ -181,46 +135,56 @@ async fn main() {
     let executor_actor = actors::ExecutorActor::new(monitoring, status_recipients);
     let executor_addr = executor_actor.start();
 
-    let scheduler_actor = actors::SchedulerActor::new(executor_addr.recipient());
+    let scheduler_actor = actors::SchedulerActor::new(vec![
+        executor_addr.recipient()
+    ]);
     let scheduler_addr = scheduler_actor.start();
 
-    let monitor_file_addr = match config.monitor_file {
-        Some(p) => Some(actors::FileActor::new(p).start()),
-        None => None
+    // all the configurators
+
+    let configurator = ConfiguratorActor::new(
+        vec![scheduler_addr.recipient()],
+        vec![alerter_addr.recipient()],
+    );
+
+    let session_actor = actors::SessionActor::new(
+        vec![]
+    );
+    let session_actor_addr = session_actor.start();
+    let configurator_addr = configurator.start();
+
+    debug!("Starting the agent with actix");
+
+    match session_actor_addr.send(CurrentConfig { config: config.clone() }).await {
+        Ok(Ok(_)) => { 
+            info!("Successfully started session");
+        },
+        Ok(Err(err)) => {
+            info!("Error starting session: {}", err);
+            std::process::exit(1);
+        },
+        Err(err) => {
+            info!("Error starting session: {}", err);
+            std::process::exit(1);
+        }
     };
 
-    let configurator_actor = actors::ConfiguratorActor::new(
-        api_addr.clone(),
-        scheduler_addr,
-        vec![alerter_addr.recipient()],
-        monitor_file_addr
-    );
-    let configurator_addr = configurator_actor.start();
+    match configurator_addr.send(CurrentConfig { config: config.clone() }).await {
+        Ok(Ok(_)) => { 
+            info!("Successfully started session");
+        },
+        Ok(Err(err)) => {
+            info!("Error starting session: {}", err);
+            std::process::exit(1);
+        },
+        Err(err) => {
+            info!("Error starting session: {}", err);
+            std::process::exit(1);
+        }
+    };
 
-    let session_actor =
-        actors::SessionActor::new(&agent_id, &group_id, api_addr.clone(), configurator_addr);
-    let session_actor_addr = session_actor.start();
-
-    debug!("Running the Actix system");
-
+    debug!("Done in the main thread");
     loop {
-        match session_actor_addr.send(SessionInit {}).await {
-            Ok(Ok(_)) => { 
-                info!("Successfully started session");
-                break;
-            },
-            Ok(Err(err)) => info!("Error starting session{}", match err.error { Some(ref err) => format!(": {}", err.to_string()), None => String::new() }),
-            Err(err) => error!("Error starting session: {}", err),
-        };
-
-        const FIVE_SECONDS: u64 = 5;
-
-        info!("Will try to start session again in {} second(s)", FIVE_SECONDS);
-
-        delay_for(Duration::new(FIVE_SECONDS, 0)).await;
-    }
-
-    loop {
-        async { delay_for(Duration::new(u16::MAX as u64, 0)).await }.await;
+         async_std::task::sleep(Duration::new(u64::MAX >> 32, 0)).await;
     }
 }

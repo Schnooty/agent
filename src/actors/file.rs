@@ -1,3 +1,4 @@
+#![allow(warnings)]
 use actix::prelude::*;
 use crate::actors::*;
 use std::fs::File;

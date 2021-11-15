@@ -169,6 +169,7 @@ fn get_node_info() -> NodeInfo {
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "()")]
 pub struct AlertUpdate {
+    pub uid: String,
     pub alerts: Vec<models::Alert>
 }
 
@@ -177,6 +178,7 @@ impl Handler<AlertUpdate> for AlerterActor {
     type Result = ();
 
     fn handle(&mut self, msg: AlertUpdate, _ctx: &mut Self::Context) -> Self::Result {
+        debug!("Handling alerts");
         self.alerts = msg.alerts;
     }
 }
