@@ -9,7 +9,7 @@ use crate::http::{HttpClient, HttpError};
 use std::time::Duration as StdDuration;
 use http::request::Request;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HttpConfig {
     pub base_url: String,
     pub api_key: Option<String>
@@ -168,7 +168,8 @@ impl Api for HttpApi {
         debug!("Building heartbeat request (uri={})", uri);
 
         let mut builder = Request::builder()
-            .method("POST")
+            .method("PUT")
+            .header("Content-Type", "application/json")
             .uri(uri);
 
         if let Some((agent_id, Some(password))) = basic_auth {
@@ -227,10 +228,10 @@ impl Api for HttpApi {
 
             debug!("Loading JSON data");
 
-            let response_json: serde_json::Result<models::Session> = serde_json::from_slice(response.body());
+            let response_json: serde_json::Result<models::SessionContainer> = serde_json::from_slice(response.body());
 
             match response_json {
-                Ok(r) => Ok(r),
+                Ok(s) => Ok(s.session),
                 Err(e) => Err(Error::new(format!("Agent failed to load the agent list from API: {}", e)))
             }
         })

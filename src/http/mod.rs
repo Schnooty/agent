@@ -12,12 +12,17 @@ use crate::futures::AsyncWriteExt as AsyncWrite;
 use http::header::HeaderMap;
 use log::trace;
 use http::response::Builder;
-
-// use async-native-tls
-
+use std::time::Duration;
 
 pub struct HttpClient {
     request: Request<String>
+}
+
+#[derive(Default, Debug)]
+pub struct HttpOptions {
+    pub timeout: Option<Duration>,
+    pub http_proxy: Option<(String, u16)>,
+    pub https_proxy: Option<(String, u16)>
 }
 
 const HTTP_VERSION: &'static str = "HTTP/1.1";
@@ -41,7 +46,9 @@ impl HttpClient {
         let uri = request.uri();
         let mut req_bytes = Vec::new();
 
-        trace!("Starting request: {} {}", uri, request.method());
+        let body_bytes = self.request.body().as_bytes();
+
+        debug!("Starting request: {} {}", uri, request.method());
 
         let host = match uri.host() {
             Some(h) => h,
@@ -62,6 +69,7 @@ impl HttpClient {
         }
 
         Write::write_all(&mut req_bytes, &format!("Connection: Close\r\n").into_bytes())?;
+        Write::write_all(&mut req_bytes, &format!("Content-Length: {}\r\n", body_bytes.len()).into_bytes())?;
 
         for (h, v) in headers {
             Write::write_all(&mut req_bytes, h.as_ref())?;
@@ -71,10 +79,7 @@ impl HttpClient {
         }
 
         Write::write_all(&mut req_bytes, &[NL])?;
-        Write::write_all(&mut req_bytes, self.request.body().as_bytes())?;
-
-        let mut file = std::fs::File::create("foo.txt").unwrap();
-        file.write_all(&req_bytes).unwrap();
+        Write::write_all(&mut req_bytes, body_bytes)?;
 
         let response: Vec<u8> = if uri.scheme() == Some(&Scheme::HTTP) {
             let port = match uri.port() {
@@ -93,8 +98,7 @@ impl HttpClient {
             let mut res_bytes = Vec::new();
             stream.read_to_end(&mut res_bytes).await?;
 
-            trace!("Successfully read {} byte(s)", res_bytes.len());
-            trace!("Response as string: {:?}", String::from_utf8_lossy(&res_bytes));
+            debug!("Successfully read {} byte(s)", res_bytes.len());
             res_bytes
         } else if uri.scheme() == Some(&Scheme::HTTPS) {
             let port = match uri.port() {
@@ -107,17 +111,20 @@ impl HttpClient {
             let mut tls_stream = async_native_tls::connect(host, stream).await?;
 
             trace!("Writing {} byte(s)", req_bytes.len());
+            trace!("Full request: {}", String::from_utf8_lossy(&req_bytes));
             AsyncWrite::write_all(&mut tls_stream, &mut req_bytes).await?;
 
-            trace!("Reading response");
+            debug!("Reading response");
             let mut res_bytes = Vec::new();
             tls_stream.read_to_end(&mut res_bytes).await?;
 
-            trace!("Successfully read response");
+            debug!("Successfully read response");
             res_bytes
         } else {
             todo!()
         };
+
+        trace!("Entire response: {}", String::from_utf8_lossy(&response));
 
         HttpParser::new(&response).parse_response()
     }

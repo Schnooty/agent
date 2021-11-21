@@ -67,46 +67,72 @@ impl Handler<CurrentConfig> for SessionActor {
 
         debug!("Using base url {} to initialise session", base_url);
 
-        // initalise the API
-        let api = HttpApi::new(&HttpConfig {
+        // initalise the config 
+        let http_config = HttpConfig {
             base_url,
             api_key: config_msg.config.api_key.clone()
-        });
-
-        let session_id = config_msg.config.session.name.clone();
-        let session_info_recipients = self.session_recipients.clone();
-
-        let heartbeat_process = move |_: &mut SessionActor, ctx: &mut Context<Self>| { 
-            debug!("Ready to send heartbeat now");
-            let sid = session_id.clone();
-            let recipients = session_info_recipients.clone();
-            let mut api = api.clone();
-
-            debug!("Sending heartbeat now");
-
-            let heartbeat_future = async move {
-                match api.post_heartbeat(&sid).await {
-                    Ok(session) => {
-                        debug!("Heartbeat sent successfully");
-
-                        for recipient in recipients {
-                            if let Err(err) = recipient.do_send(SessionInfoMsg {
-                                session: session.clone()
-                            }) {
-                                error!("Error sending session info msg: {}", err);
-                            }
-                        }
-                    },
-                    Err(err) => error!("Error posting heartbeat: {}", err)
-                }
-            };
-            ctx.spawn(actix::fut::wrap_future(heartbeat_future));
         };
 
+        let session_id = config_msg.config.session.name.clone();
+
+        let session_msg = SessionTimeout {
+            http_config,
+            session_id
+        };
+
+        ctx.address().do_send(session_msg.clone());
+
         debug!("Setting up heartbeat interval");
+        let heartbeat_process = move |_: &mut SessionActor, ctx: &mut Context<Self>| {
+            ctx.address().do_send(session_msg.clone());
+        };
         let heartbeat_duration = Duration::new(60, 0);
         self.heartbeat_handle = Some(ctx.run_interval(heartbeat_duration, heartbeat_process));
 
         Ok(())
     }
+}
+
+impl Handler<SessionTimeout> for SessionActor {
+    type Result = Result<(), Error>;
+
+    fn handle(&mut self, timeout: SessionTimeout, ctx: &mut Context<Self>) -> Self::Result {
+        debug!("Ready to send heartbeat now");
+
+        let api = HttpApi::new(&timeout.http_config);
+        let sid = timeout.session_id;
+        let recipients = self.session_recipients.clone();
+
+        let mut api = api.clone();
+
+        debug!("Sending heartbeat now");
+
+        let heartbeat_future = async move {
+            match api.post_heartbeat(&sid).await {
+                Ok(session) => {
+                    debug!("Heartbeat sent successfully");
+
+                    for recipient in recipients {
+                        if let Err(err) = recipient.do_send(SessionInfoMsg {
+                            session: session.clone()
+                        }) {
+                            error!("Error sending session info msg: {}", err);
+                        }
+                    }
+                },
+                Err(err) => error!("Error posting heartbeat: {}", err)
+            }
+        };
+
+        ctx.spawn(actix::fut::wrap_future(heartbeat_future));
+        
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Message)]
+#[rtype(result = "Result<(), Error>")]
+struct SessionTimeout {
+    session_id: String,
+    http_config: HttpConfig
 }
