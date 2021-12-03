@@ -22,9 +22,10 @@ extern crate lettre_email;
 extern crate redis;
 extern crate serde_yaml;
 extern crate async_std;
-extern crate http as http_types;
+//extern crate http as http_types;
 extern crate async_native_tls;
 extern crate base64;
+extern crate reqwest;
 
 mod error;
 mod monitoring;

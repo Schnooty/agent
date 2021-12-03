@@ -4,7 +4,7 @@ use redis::RedisError;
 use serde_json;
 use std::io;
 use crate::http::HttpError;
-use http_types::Error as HttpTypesError;
+//use http_types::Error as HttpTypesError;
 
 #[derive(Debug)]
 pub struct Error {
@@ -47,13 +47,13 @@ impl From<HttpError> for Error {
     }
 }
 
-impl From<HttpTypesError> for Error {
+/*impl From<HttpTypesError> for Error {
     fn from(err: HttpTypesError) -> Self {
         Self {
             description: format!("HTTP error: {}", err)
         }
     }
-}
+}*/
 
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
@@ -67,6 +67,14 @@ impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
         Self {
             description: format!("IO error: {}", err)
+        }
+    }
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Self {
+        Self {
+            description: format!("HTTP error: {}", err)
         }
     }
 }

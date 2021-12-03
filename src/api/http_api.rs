@@ -7,7 +7,7 @@ use hostname::get as get_hostname;
 
 use crate::http::{HttpClient, HttpError};
 use std::time::Duration as StdDuration;
-use http::request::Request;
+//use http::request::Request;
 
 #[derive(Clone, Debug)]
 pub struct HttpConfig {
@@ -75,8 +75,8 @@ impl ReadApi for HttpApi {
 
         let uri = format!("{}monitors", self.config.base_url.to_string());
 
-        let mut request = Request::builder()
-            .uri(uri);
+        let mut request = reqwest::Client::new()
+            .request(reqwest::Method::GET, uri);
 
         if let Some((agent_id, Some(password))) = basic_auth {
             let base64_creds = base64::encode(format!("{}:{}", agent_id, password));
@@ -85,7 +85,7 @@ impl ReadApi for HttpApi {
         }
 
         Box::pin(async {
-            let client = HttpClient::new(request.body(String::new())?);
+            let client = HttpClient::new(request.body(String::new()).build().unwrap());
 
             let response_result = client.send().await;
 
@@ -96,7 +96,7 @@ impl ReadApi for HttpApi {
                         return Err(Error::new(format!("Agent failed to get monitors. Got status code {}", response.status())));
                     }
 
-                    Ok(serde_json::from_slice(response.body())?)
+                    Ok(serde_json::from_slice(&response.bytes().await?)?)
                 }
                 Err(err) => return Err(Error::new(format!("Agent failed to get monitors: {}", err))),
             };
@@ -117,7 +117,8 @@ impl ReadApi for HttpApi {
 
         let uri = format!("{}alerts", self.config.base_url.to_string());
 
-        let mut builder = Request::builder();
+        let mut builder = reqwest::Client::new().request(reqwest::Method::GET, uri);
+
         if let Some((agent_id, Some(password))) = basic_auth {
             let base64_creds = base64::encode(format!("{}:{}", agent_id, password));
 
@@ -125,7 +126,7 @@ impl ReadApi for HttpApi {
         }
 
         Box::pin(async move {
-            let client = HttpClient::new(builder.body(String::new()).unwrap());
+            let client = HttpClient::new(builder.body(String::new()).build().unwrap());
             let response_result = client.send().await;
 
             let response_body_result: Result<models::AlertArray, _> = match response_result {
@@ -135,9 +136,7 @@ impl ReadApi for HttpApi {
                         return Err(Error::new(format!("Agent failed to get alerts. Got status code {}", response.status())));
                     }
 
-                    serde_json::from_slice(response.body())
-
-                    //response.body().iter().cloned().collect()
+                    serde_json::from_slice(&response.bytes().await?)
                 }
                 Err(err) => return Err(Error::new(format!("Agent failed to get alerts: {}", err)))
             };
@@ -167,10 +166,9 @@ impl Api for HttpApi {
 
         debug!("Building heartbeat request (uri={})", uri);
 
-        let mut builder = Request::builder()
-            .method("PUT")
-            .header("Content-Type", "application/json")
-            .uri(uri);
+        let mut builder = reqwest::Client::new()
+            .request(reqwest::Method::PUT, uri)
+            .header("Content-Type", "application/json");
 
         if let Some((agent_id, Some(password))) = basic_auth {
             let base64_creds = base64::encode(format!("{}:{}", agent_id, password));
@@ -199,7 +197,7 @@ impl Api for HttpApi {
         //client = client.json()
         //    .timeout(StdDuration::from_secs(self.options.timeout_seconds));
 
-        let client = HttpClient::new(builder.body(body).unwrap()); // TODO
+        let client = HttpClient::new(builder.body(body).build().unwrap()); // TODO
 
         let _agent_session_id = session_name.to_owned();
 
@@ -228,7 +226,7 @@ impl Api for HttpApi {
 
             debug!("Loading JSON data");
 
-            let response_json: serde_json::Result<models::SessionContainer> = serde_json::from_slice(response.body());
+            let response_json: serde_json::Result<models::SessionContainer> = serde_json::from_slice(&response.bytes().await?);
 
             match response_json {
                 Ok(s) => Ok(s.session),
@@ -249,9 +247,7 @@ impl Api for HttpApi {
             statuses
         };
 
-        let mut builder = Request::builder()
-            .uri(uri)
-            .method("POST");
+        let mut builder = reqwest::Client::new().request(reqwest::Method::POST, uri);
 
         if let Some((agent_id, Some(password))) = basic_auth {
             let base64_creds = base64::encode(format!("{}:{}", agent_id, password));
@@ -260,8 +256,8 @@ impl Api for HttpApi {
             //client = client.basic_auth(&agent_id, password);
         }
 
-        let request = builder.body(serde_json::to_string(&body).unwrap()).unwrap(); // TODO
-        let client = HttpClient::new(request);
+        let request = builder.body(serde_json::to_string(&body).unwrap()); // TODO
+        let client = HttpClient::new(request.build().unwrap());
 
         Box::pin(async move {
             let result = match client.send().await {
@@ -278,8 +274,8 @@ impl Api for HttpApi {
                 error!("Error uploading statuses. Got status code: {}", status);
 
                 let status_error = Error::new(format!("Failed to upload results. Got status code: {}", status));
-
-                let errors: Vec<models::ResponseError> = match serde_json::from_slice(result.body()) {
+                let bytes = result.bytes().await?;
+                let errors: Vec<models::ResponseError> = match serde_json::from_slice(&bytes) {
                     Ok(e) => e,
                     Err(err) => {
                         error!("Failed to parse error response: {}", err);

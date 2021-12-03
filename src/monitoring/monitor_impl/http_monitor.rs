@@ -6,8 +6,8 @@ use crate::monitoring::MonitorFuture;
 use chrono::prelude::*;
 use openapi_client::models;
 use std::fmt::Write;
-use http::request::Request;
-use http::method::Method;
+//use http::request::Request;
+//use http::method::Method;
 use crate::http::HttpClient;
 
 pub struct HttpMonitor;
@@ -42,12 +42,11 @@ impl MonitorSource for HttpMonitor {
                     .body
                     .method
                     .clone()
-                    .map(|m| m.parse() as Result<Method, _>),
+                    .map(|m| m.parse() as Result<reqwest::Method, _>),
                 &monitor.body.url,
             ) {
-                let mut builder = Request::builder()
-                    .method(method)
-                    .uri(url);
+                let mut builder = reqwest::Client::new()
+                    .request(method.clone(), url);
 
                 for header in monitor.body.headers.unwrap_or_default().iter() {
                     builder = builder.header(&header.name, &header.value);
@@ -61,7 +60,7 @@ impl MonitorSource for HttpMonitor {
                 };
 
                 (
-                    builder.body(body)?,
+                    builder.body(body).build().unwrap(),
                     status_builder.description(format!("GET {} has success status code", url)),
                 )
             } else {

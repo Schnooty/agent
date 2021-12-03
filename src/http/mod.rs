@@ -1,121 +1,33 @@
-use http::request::Request;
-use http::response::Response;
-use http::uri::Scheme;
-use http::status::StatusCode;
-use http::header::HeaderName;
-use http::header::HeaderValue;
-use async_std::net::TcpStream;
-use std::io::Write;
+use reqwest::{Request, Response, Error};
 use std::io;
-use crate::futures::AsyncReadExt;
-use crate::futures::AsyncWriteExt as AsyncWrite;
-use http::header::HeaderMap;
-use log::trace;
-use http::response::Builder;
-use std::time::Duration;
 
 pub struct HttpClient {
-    request: Request<String>
+    request: Request
 }
-
-#[derive(Default, Debug)]
-pub struct HttpOptions {
-    pub timeout: Option<Duration>,
-    pub http_proxy: Option<(String, u16)>,
-    pub https_proxy: Option<(String, u16)>
-}
-
-const HTTP_VERSION: &'static str = "HTTP/1.1";
-const SPACE: u8 = ' ' as u8;
-const NL: u8 = '\n' as u8;
-const CR: u8 = '\r' as u8;
-const HOST: &'static str = "Host";
-const HTTP_PORT: u16 = 80;
-const HTTPS_PORT: u16 = 443;
 
 impl HttpClient {
-    pub fn new(request: Request<String>) -> Self {
+    pub fn new(request: Request) -> Self {
         Self {
             request
         }
     }
 
-    pub async fn send(&self) -> Result<Response<Vec<u8>>, HttpError> {
-        let request = &self.request;
-        let uri = request.uri();
-        let mut req_bytes = Vec::new();
-
-        let body_bytes = self.request.body().as_bytes();
-
-        debug!("Starting request: {} {}", uri, request.method());
-
-        let host = match uri.host() {
-            Some(h) => h,
-            None => return Err(HttpError::MissingHost)
-        };
-
-        Write::write_all(&mut req_bytes, request.method().as_ref().as_bytes())?; 
-        Write::write_all(&mut req_bytes, &[SPACE])?;
-        Write::write_all(&mut req_bytes, uri.path().as_ref())?; // TODO IS IT ENCODED?
-        Write::write_all(&mut req_bytes, &[SPACE])?;
-        Write::write_all(&mut req_bytes, HTTP_VERSION.as_bytes())?;
-        Write::write_all(&mut req_bytes, &[NL])?;
-
-        let headers = self.request.headers();
-
-        if !headers.contains_key(HOST) {
-            Write::write_all(&mut req_bytes, &format!("Host: {}\r\n", host).into_bytes())?;
-        }
-
-        Write::write_all(&mut req_bytes, &format!("Connection: Close\r\n").into_bytes())?;
-        Write::write_all(&mut req_bytes, &format!("Content-Length: {}\r\n", body_bytes.len()).into_bytes())?;
-
-        for (h, v) in headers {
-            Write::write_all(&mut req_bytes, h.as_ref())?;
-            Write::write_all(&mut req_bytes, &format!(": ",).as_bytes())?;
-            Write::write_all(&mut req_bytes, v.as_bytes())?;
-            Write::write_all(&mut req_bytes, &[NL])?;
-        }
-
-        Write::write_all(&mut req_bytes, &[NL])?;
-        Write::write_all(&mut req_bytes, body_bytes)?;
-
-        if uri.scheme() == Some(&Scheme::HTTP) {
-            let port = match uri.port() {
-                Some(p) => p.as_u16(),
-                None => HTTP_PORT
-            };
-
-            let auth = format!("{}:{}", host, port);
-            let mut stream = TcpStream::connect(auth).await?;
-
-            AsyncWrite::write_all(&mut stream, &mut req_bytes).await?;
-
-            HttpParser::new(&mut stream).parse_response().await
-        } else if uri.scheme() == Some(&Scheme::HTTPS) {
-            let port = match uri.port() {
-                Some(p) => p.as_u16(),
-                None => HTTPS_PORT
-            };
-            let auth = format!("{}:{}", host, port);
-            let stream = TcpStream::connect(auth).await?;
-            let mut tls_stream = async_native_tls::connect(host, stream).await?;
-
-            AsyncWrite::write_all(&mut tls_stream, &mut req_bytes).await?;
-
-            debug!("Reading response");
-
-            HttpParser::new(&mut tls_stream).parse_response().await
-        } else {
-            todo!()
-        }
-
+    pub async fn send(self) -> Result<Response, HttpError> {
+        let method = self.request.method().clone();
+        let url = self.request.url().clone();
+        debug!("Sending request {} {}", method, url);
+        let response = reqwest::Client::new()
+            .execute(self.request)
+            .await?;
+        debug!("Got response {} for {} {}", response.status(), method, url);
+        Ok(response)
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum HttpError {
-    MissingHost,
+    Unknown,
+    //MissingHost,
     IOErr,
     TlsErr,
     ResponseParseErr
@@ -151,7 +63,14 @@ impl From<std::num::ParseIntError> for HttpError {
     }
 }
 
-impl From<http::header::InvalidHeaderName> for HttpError {
+impl From<Error> for HttpError {
+    fn from(err: Error) -> Self {
+        error!("HTTP error: {}", err);
+        HttpError::Unknown
+    }
+}
+
+/*impl From<http::header::InvalidHeaderName> for HttpError {
     fn from(_: http::header::InvalidHeaderName) -> Self {
         HttpError::ResponseParseErr
     }
@@ -173,9 +92,9 @@ impl From<http::Error> for HttpError {
     fn from(_: http::Error) -> Self {
         todo!()
     }
-}
+}*/
 
-struct HttpParser<'a, R: AsyncReadExt> {
+/*struct HttpParser<'a, R: AsyncReadExt> {
     index: usize,
     buffer: Vec<u8>,
     source: &'a mut R,
@@ -184,11 +103,11 @@ struct HttpParser<'a, R: AsyncReadExt> {
     body: Vec<u8>,
     eof: bool,
     end: usize,
-}
+}*/
 
-const DEFAULT_BUFFER_SIZE: usize = 1024;
+//const DEFAULT_BUFFER_SIZE: usize = 1024;
 
-impl<'a, R: AsyncReadExt + Unpin> HttpParser<'a, R> {
+/*impl<'a, R: AsyncReadExt + Unpin> HttpParser<'a, R> {
     fn new(source: &'a mut R) -> Self {
         Self::with_options(source, DEFAULT_BUFFER_SIZE)
     }
@@ -426,9 +345,9 @@ impl<'a, R: AsyncReadExt + Unpin> HttpParser<'a, R> {
     fn at_end(&self) -> bool {
         self.eof
     }
-}
+}*/
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod test {
     use actix_rt;
     use crate::http::HttpClient;
@@ -539,4 +458,4 @@ mod test {
     async fn assert_body(resp: &Response<Vec<u8>>, body: &str) {
         assert_eq!(String::from_utf8(resp.body().clone()).unwrap(), body);
     }
-}
+}*/
