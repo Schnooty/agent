@@ -1,21 +1,21 @@
 use actix::prelude::*;
 
+mod alerter;
 mod api;
 mod configurator;
 mod executor;
+mod file;
 mod scheduler;
 mod session;
-mod uploader;
-mod alerter;
-mod file;
 mod timer;
+mod uploader;
 
+pub use alerter::*;
 pub use api::*;
 pub use configurator::*;
 pub use executor::*;
+pub use file::*;
 pub use scheduler::*;
 pub use session::*;
-pub use uploader::*;
-pub use alerter::*;
-pub use file::*;
 pub use timer::*;
+pub use uploader::*;

@@ -2,9 +2,9 @@ use crate::api::*;
 use crate::error::Error;
 use actix::prelude::ResponseFuture;
 use actix::prelude::*;
-use openapi_client::models;
 use async_trait::async_trait;
 use futures::FutureExt;
+use openapi_client::models;
 
 use std::marker::Unpin;
 
@@ -14,7 +14,7 @@ pub struct ApiActor {
 
 impl ApiActor {
     pub fn new<A: Api + 'static + Unpin>(api: A) -> Self {
-         Self { api: Box::new(api) }
+        Self { api: Box::new(api) }
     }
 }
 
@@ -38,18 +38,16 @@ pub struct MonitorsRequest {
 #[derive(Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct MonitorsResponse {
-    pub monitors: Vec<models::Monitor>
+    pub monitors: Vec<models::Monitor>,
 }
 
 pub struct RequestHandle {
-    pub id: usize
+    pub id: usize,
 }
 
 impl RequestHandle {
     pub fn new() -> Self {
-        RequestHandle {
-            id: 0
-        }
+        RequestHandle { id: 0 }
     }
 }
 
@@ -59,19 +57,16 @@ impl Handler<MonitorsRequest> for ApiActor {
     fn handle(&mut self, msg: MonitorsRequest, ctx: &mut Self::Context) -> Self::Result {
         let handle = RequestHandle::new();
         let addr = msg.recipient.clone();
-        let future = self.api.get_monitors()
-            .map(move |m| {
-                match m {
-                    Ok(monitors) => { 
-                        if let Err(err) = addr.do_send(MonitorsResponse { monitors }) {
-                            error!("Error returning monitors: {}", err);
-                        }
-                    },
-                    Err(err) => {
-                        error!("Error returning monitors: {}", err);
-                    }
+        let future = self.api.get_monitors().map(move |m| match m {
+            Ok(monitors) => {
+                if let Err(err) = addr.do_send(MonitorsResponse { monitors }) {
+                    error!("Error returning monitors: {}", err);
                 }
-            });
+            }
+            Err(err) => {
+                error!("Error returning monitors: {}", err);
+            }
+        });
         ctx.spawn(future.into_actor(self));
         Ok(handle)
     }
@@ -86,7 +81,7 @@ pub struct AlertsRequest {
 #[derive(Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct AlertsResponse {
-    pub alerts: Vec<models::Alert>
+    pub alerts: Vec<models::Alert>,
 }
 
 impl Handler<AlertsRequest> for ApiActor {
@@ -94,24 +89,20 @@ impl Handler<AlertsRequest> for ApiActor {
 
     fn handle(&mut self, msg: AlertsRequest, ctx: &mut Self::Context) -> Self::Result {
         let addr = msg.recipient.clone();
-        let future = self.api.get_alerts()
-            .map(move |a| {
-                match a {
-                    Ok(alerts) => { 
-                        if let Err(err) = addr.do_send(AlertsResponse { alerts }) {
-                            error!("Error returning alerts: {}", err);
-                        }
-                    },
-                    Err(err) => {
-                        error!("Error returning monitors: {}", err);
-                    }
+        let future = self.api.get_alerts().map(move |a| match a {
+            Ok(alerts) => {
+                if let Err(err) = addr.do_send(AlertsResponse { alerts }) {
+                    error!("Error returning alerts: {}", err);
                 }
-            });
+            }
+            Err(err) => {
+                error!("Error returning monitors: {}", err);
+            }
+        });
         ctx.spawn(future.into_actor(self));
         Ok(RequestHandle::new())
     }
 }
-
 
 #[derive(Message)]
 #[rtype(result = "Result<RequestHandle, Error>")]
@@ -124,7 +115,7 @@ pub struct HeartbeatRequest {
 #[derive(Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct HeartbeatResponse {
-    pub session: models::Session
+    pub session: models::Session,
 }
 
 impl Handler<HeartbeatRequest> for ApiActor {
@@ -132,35 +123,32 @@ impl Handler<HeartbeatRequest> for ApiActor {
 
     fn handle(&mut self, msg: HeartbeatRequest, _ctx: &mut Self::Context) -> Self::Result {
         let addr = msg.recipient.clone();
-        self.api.post_heartbeat(&msg.session_id)
-            .map(move |s| {
-                match s {
-                    Ok(session) => { 
-                        if let Err(err) = addr.do_send(HeartbeatResponse { session }) {
-                            error!("Error returning session: {}", err);
-                        }
-                    },
-                    Err(err) => {
+        self.api
+            .post_heartbeat(&msg.session_id)
+            .map(move |s| match s {
+                Ok(session) => {
+                    if let Err(err) = addr.do_send(HeartbeatResponse { session }) {
                         error!("Error returning session: {}", err);
                     }
                 }
+                Err(err) => {
+                    error!("Error returning session: {}", err);
+                }
             });
-        Ok(RequestHandle::new()) 
+        Ok(RequestHandle::new())
     }
 }
-
 
 #[derive(Message)]
 #[rtype(result = "Result<RequestHandle, Error>")]
 pub struct StatusUpdatesRequest {
     pub recipient: Vec<Recipient<StatusUpdatesResponse>>,
-    pub statuses: Vec<models::MonitorStatus>
+    pub statuses: Vec<models::MonitorStatus>,
 }
 
 #[derive(Message)]
 #[rtype(result = "Result<RequestHandle, Error>")]
-pub struct StatusUpdatesResponse {
-}
+pub struct StatusUpdatesResponse {}
 
 impl Handler<StatusUpdatesRequest> for ApiActor {
     type Result = Result<RequestHandle, Error>;
@@ -168,17 +156,16 @@ impl Handler<StatusUpdatesRequest> for ApiActor {
     fn handle(&mut self, msg: StatusUpdatesRequest, ctx: &mut Self::Context) -> Self::Result {
         let handle = RequestHandle::new();
         //let addr = msg.recipient.clone();
-        let future = self.api.post_statuses(&msg.statuses)
-            .map(move |m| {
-                match m {
-                    Ok(_) => { 
-                        // do nothing
-                    },
-                    Err(err) => {
-                        error!("Error returning status update: {}", err);
-                    }
+        let future = self.api.post_statuses(&msg.statuses).map(move |m| {
+            match m {
+                Ok(_) => {
+                    // do nothing
                 }
-            });
+                Err(err) => {
+                    error!("Error returning status update: {}", err);
+                }
+            }
+        });
         ctx.spawn(future.into_actor(self));
         Ok(handle)
     }

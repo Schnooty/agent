@@ -1,4 +1,4 @@
-use crate::api::{ReadApi, ApiFuture};
+use crate::api::{ApiFuture, ReadApi};
 use openapi_client::models;
 
 pub struct FileApi;

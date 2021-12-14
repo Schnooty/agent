@@ -1,9 +1,9 @@
-use actix::prelude::*;
 use crate::actors::*;
 use crate::error::Error;
+use actix::prelude::*;
 use openapi_client::models;
-use std::time;
 use std::collections::HashSet;
+use std::time;
 
 pub struct UploaderActor {
     api_addr: Addr<ApiActor>,
@@ -19,7 +19,7 @@ impl UploaderActor {
             buffer: vec![],
             //offset: 0,
             last_upload_started: None,
-            interval: None
+            interval: None,
         }
     }
 
@@ -43,7 +43,7 @@ impl UploaderActor {
         }
     }
 
-    fn perform_upload(&mut self, ctx: &mut <Self as Actor>::Context) { 
+    fn perform_upload(&mut self, ctx: &mut <Self as Actor>::Context) {
         // if empty, STOP
         if self.buffer.is_empty() {
             return;
@@ -56,7 +56,8 @@ impl UploaderActor {
         buffer.sort_by(|s1, s2| s2.timestamp.cmp(&s1.timestamp));
 
         // filter out the most recent results
-        let statuses: Vec<_> = buffer.into_iter()
+        let statuses: Vec<_> = buffer
+            .into_iter()
             .filter(|status| {
                 if already_seen.contains(&status.monitor_name) {
                     false
@@ -71,9 +72,9 @@ impl UploaderActor {
 
         // send message to API actor
         debug!("Uploading statuses (statuses_len={})", statuses.len());
-        self.api_addr.do_send(StatusUpdatesRequest { 
+        self.api_addr.do_send(StatusUpdatesRequest {
             recipient: vec![],
-            statuses: statuses.clone() 
+            statuses: statuses.clone(),
         });
 
         /*match request {

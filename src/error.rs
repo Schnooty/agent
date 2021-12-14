@@ -1,9 +1,9 @@
-use std::error;
-use std::fmt;
+use crate::http::HttpError;
 use redis::RedisError;
 use serde_json;
+use std::error;
+use std::fmt;
 use std::io;
-use crate::http::HttpError;
 //use http_types::Error as HttpTypesError;
 
 #[derive(Debug)]
@@ -20,13 +20,13 @@ impl fmt::Display for Error {
 impl Error {
     pub fn new<S: ToString>(description: S) -> Self {
         Self {
-            description: description.to_string()
+            description: description.to_string(),
         }
     }
 
     pub fn from<E: error::Error>(error: E) -> Self {
         Self {
-            description: format!("{}", error)
+            description: format!("{}", error),
         }
     }
 }
@@ -34,7 +34,7 @@ impl Error {
 impl From<RedisError> for Error {
     fn from(err: RedisError) -> Self {
         Self {
-            description: format!("Redis error: {}", err)
+            description: format!("Redis error: {}", err),
         }
     }
 }
@@ -42,7 +42,7 @@ impl From<RedisError> for Error {
 impl From<HttpError> for Error {
     fn from(err: HttpError) -> Self {
         Self {
-            description: format!("HTTP error: {}", err)
+            description: format!("HTTP error: {}", err),
         }
     }
 }
@@ -58,7 +58,7 @@ impl From<HttpError> for Error {
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
         Self {
-            description: format!("Serde error: {}", err)
+            description: format!("Serde error: {}", err),
         }
     }
 }
@@ -66,7 +66,7 @@ impl From<serde_json::Error> for Error {
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
         Self {
-            description: format!("IO error: {}", err)
+            description: format!("IO error: {}", err),
         }
     }
 }
@@ -74,7 +74,7 @@ impl From<io::Error> for Error {
 impl From<reqwest::Error> for Error {
     fn from(err: reqwest::Error) -> Self {
         Self {
-            description: format!("HTTP error: {}", err)
+            description: format!("HTTP error: {}", err),
         }
     }
 }

@@ -1,24 +1,20 @@
-use reqwest::{Request, Response, Error};
+use reqwest::{Error, Request, Response};
 use std::io;
 
 pub struct HttpClient {
-    request: Request
+    request: Request,
 }
 
 impl HttpClient {
     pub fn new(request: Request) -> Self {
-        Self {
-            request
-        }
+        Self { request }
     }
 
     pub async fn send(self) -> Result<Response, HttpError> {
         let method = self.request.method().clone();
         let url = self.request.url().clone();
         debug!("Sending request {} {}", method, url);
-        let response = reqwest::Client::new()
-            .execute(self.request)
-            .await?;
+        let response = reqwest::Client::new().execute(self.request).await?;
         debug!("Got response {} for {} {}", response.status(), method, url);
         Ok(response)
     }
@@ -30,7 +26,7 @@ pub enum HttpError {
     //MissingHost,
     IOErr,
     TlsErr,
-    ResponseParseErr
+    ResponseParseErr,
 }
 
 impl std::fmt::Display for HttpError {
@@ -118,7 +114,7 @@ impl From<http::Error> for HttpError {
         Self {
             index: 0,
             end: 0,
-            source, 
+            source,
             buffer,
             status: None,
             header_map: HeaderMap::new(),
@@ -231,7 +227,7 @@ impl From<http::Error> for HttpError {
     async fn parse_body(&mut self) -> Result<Vec<u8>, HttpError> {
         let content_length: usize = match self.header_map.get("Content-Length").map(|h| h.to_str().unwrap()) {
             Some(c) => {
-                c.trim().parse().unwrap() 
+                c.trim().parse().unwrap()
             },
             None => {
                 let mut existing_buffer: Vec<u8> = self
@@ -262,7 +258,7 @@ impl From<http::Error> for HttpError {
                 if self.at_end() {
                     return Err(HttpError::ResponseParseErr);
                 }
-                
+
                 self.fill_buffer().await?;
                 body.extend_from_slice(&self.buffer[self.index..self.end]);
                 if self.index == self.end {
@@ -447,7 +443,7 @@ mod test {
     }
 
     async fn assert_header(headers: &HeaderMap, key: &str, value: &str) {
-        let actual_header: &HeaderValue = headers 
+        let actual_header: &HeaderValue = headers
             .get(key)
             .clone()
             .unwrap();

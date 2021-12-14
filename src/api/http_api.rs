@@ -1,9 +1,9 @@
-use chrono::Utc;
-use chrono::DateTime;
-use crate::api::{Api, ReadApi, ApiFuture};
+use crate::api::{Api, ApiFuture, ReadApi};
 use crate::error::Error;
-use openapi_client::models;
+use chrono::DateTime;
+use chrono::Utc;
 use hostname::get as get_hostname;
+use openapi_client::models;
 
 use crate::http::{HttpClient, HttpError};
 use std::time::Duration as StdDuration;
@@ -12,7 +12,7 @@ use std::time::Duration as StdDuration;
 #[derive(Clone, Debug)]
 pub struct HttpConfig {
     pub base_url: String,
-    pub api_key: Option<String>
+    pub api_key: Option<String>,
 }
 
 #[derive(Clone)]
@@ -41,7 +41,7 @@ impl HttpApi {
         Self {
             config: config.clone(),
             options: Default::default(),
-            started_at: Utc::now()
+            started_at: Utc::now(),
         }
     }
 
@@ -55,15 +55,15 @@ impl HttpApi {
                 let mut iter = api_key.split(':');
                 let username: String = match iter.next() {
                     Some(ref u) => u.to_string(),
-                    None => String::new()
+                    None => String::new(),
                 };
                 let password: String = match iter.next() {
                     Some(ref p) => p.to_string(),
-                    None => String::new()
+                    None => String::new(),
                 };
                 Some((username, Some(password)))
-            },
-            None => None
+            }
+            None => None,
         }
     }
 }
@@ -75,8 +75,7 @@ impl ReadApi for HttpApi {
 
         let uri = format!("{}monitors", self.config.base_url.to_string());
 
-        let mut request = reqwest::Client::new()
-            .request(reqwest::Method::GET, uri);
+        let mut request = reqwest::Client::new().request(reqwest::Method::GET, uri);
 
         if let Some((agent_id, Some(password))) = basic_auth {
             let base64_creds = base64::encode(format!("{}:{}", agent_id, password));
@@ -89,30 +88,36 @@ impl ReadApi for HttpApi {
 
             let response_result = client.send().await;
 
-            let response_body_result: Result<models::MonitorArray, HttpError> = match response_result {
-                Ok(response) => {
-                    if !response.status().is_success() {
-                        warn!("Response status was NOT success status code");
-                        return Err(Error::new(format!("Agent failed to get monitors. Got status code {}", response.status())));
-                    }
+            let response_body_result: Result<models::MonitorArray, HttpError> =
+                match response_result {
+                    Ok(response) => {
+                        if !response.status().is_success() {
+                            warn!("Response status was NOT success status code");
+                            return Err(Error::new(format!(
+                                "Agent failed to get monitors. Got status code {}",
+                                response.status()
+                            )));
+                        }
 
-                    Ok(serde_json::from_slice(&response.bytes().await?)?)
-                }
-                Err(err) => return Err(Error::new(format!("Agent failed to get monitors: {}", err))),
-            };
+                        Ok(serde_json::from_slice(&response.bytes().await?)?)
+                    }
+                    Err(err) => {
+                        return Err(Error::new(format!("Agent failed to get monitors: {}", err)))
+                    }
+                };
 
             match response_body_result {
                 Ok(body) => {
                     debug!("Retrieved {} monitors", body.monitors.len());
                     Ok(body.monitors)
                 }
-                Err(err) => todo!("Convert the error")//Err(Error::from(err)),
+                Err(err) => todo!("Convert the error"), //Err(Error::from(err)),
             }
         })
     }
 
     fn get_alerts(&self) -> ApiFuture<Vec<models::Alert>> {
-        let basic_auth  = self.get_basic_auth();
+        let basic_auth = self.get_basic_auth();
         debug!("Getting monitors");
 
         let uri = format!("{}alerts", self.config.base_url.to_string());
@@ -133,17 +138,20 @@ impl ReadApi for HttpApi {
                 Ok(response) => {
                     if !response.status().is_success() {
                         warn!("Response status was NOT success status code");
-                        return Err(Error::new(format!("Agent failed to get alerts. Got status code {}", response.status())));
+                        return Err(Error::new(format!(
+                            "Agent failed to get alerts. Got status code {}",
+                            response.status()
+                        )));
                     }
 
                     serde_json::from_slice(&response.bytes().await?)
                 }
-                Err(err) => return Err(Error::new(format!("Agent failed to get alerts: {}", err)))
+                Err(err) => return Err(Error::new(format!("Agent failed to get alerts: {}", err))),
             };
 
             match response_body_result {
                 Ok(body) => Ok(body.alerts),
-                Err(err) => Err(Error::new(format!("Agent failed to get alerts: {}", err)))
+                Err(err) => Err(Error::new(format!("Agent failed to get alerts: {}", err))),
             }
         })
     }
@@ -153,10 +161,7 @@ impl Api for HttpApi {
     fn post_heartbeat(&mut self, session_name: &str) -> ApiFuture<models::Session> {
         let basic_auth = self.get_basic_auth();
 
-        debug!(
-            "Posting heartbeat (session_name={})",
-            session_name
-        );
+        debug!("Posting heartbeat (session_name={})", session_name);
 
         let uri = format!(
             "{}sessions/{}",
@@ -178,12 +183,12 @@ impl Api for HttpApi {
 
         let hostname = match get_hostname() {
             Ok(h) => h.to_string_lossy().into_owned(),
-            Err(e) => format!("Error getting hostname: {}", e)
+            Err(e) => format!("Error getting hostname: {}", e),
         };
 
         let platform = models::PlatformInfo {
             os: Some(std::env::consts::OS.to_string()),
-            cpu: None 
+            cpu: None,
         };
 
         let body = serde_json::to_string(&models::Session {
@@ -191,8 +196,9 @@ impl Api for HttpApi {
             hostname: Some(hostname),
             platform: Some(platform),
             last_updated: Utc::now(),
-            started_at: self.started_at
-        }).unwrap(); // TODO
+            started_at: self.started_at,
+        })
+        .unwrap(); // TODO
 
         //client = client.json()
         //    .timeout(StdDuration::from_secs(self.options.timeout_seconds));
@@ -213,7 +219,10 @@ impl Api for HttpApi {
                 Err(err) => {
                     error!("Error communicating with API: {:?}", err);
 
-                    return Err(Error::new(format!("Agent failed to send heartbeat: {}", err)));
+                    return Err(Error::new(format!(
+                        "Agent failed to send heartbeat: {}",
+                        err
+                    )));
                 }
             };
 
@@ -221,16 +230,23 @@ impl Api for HttpApi {
 
             if !response.status().is_success() {
                 warn!("Response status was NOT success status code");
-                return Err(Error::new(format!("Agent failed to send heartbeat. Got status code {}", response.status())));
+                return Err(Error::new(format!(
+                    "Agent failed to send heartbeat. Got status code {}",
+                    response.status()
+                )));
             }
 
             debug!("Loading JSON data");
 
-            let response_json: serde_json::Result<models::SessionContainer> = serde_json::from_slice(&response.bytes().await?);
+            let response_json: serde_json::Result<models::SessionContainer> =
+                serde_json::from_slice(&response.bytes().await?);
 
             match response_json {
                 Ok(s) => Ok(s.session),
-                Err(e) => Err(Error::new(format!("Agent failed to load the agent list from API: {}", e)))
+                Err(e) => Err(Error::new(format!(
+                    "Agent failed to load the agent list from API: {}",
+                    e
+                ))),
             }
         })
     }
@@ -242,20 +258,16 @@ impl Api for HttpApi {
 
         debug!("Uploading {} monitor status(es)", statuses.len());
 
-
         Box::pin(async move {
             for status in statuses.iter() {
-                let uri = format!("{}statuses/{}", 
-                    base_url,
-                    status.status_id
-                );
+                let uri = format!("{}statuses/{}", base_url, status.status_id);
 
                 let mut builder = reqwest::Client::new().request(reqwest::Method::POST, uri);
 
                 if let Some((ref agent_id, Some(ref password))) = basic_auth {
                     let base64_creds = base64::encode(format!("{}:{}", agent_id, password));
 
-                    builder= builder.header("Authorization", format!("Basic {}", base64_creds));
+                    builder = builder.header("Authorization", format!("Basic {}", base64_creds));
                     //client = client.basic_auth(&agent_id, password);
                 }
 
@@ -272,36 +284,6 @@ impl Api for HttpApi {
             }
 
             Ok(())
-
-            /*let body = models::MonitorStatusArray {
-                statuses
-            };
-
-            let status = result.status();
-
-            if !status.is_success() {
-                error!("Error uploading statuses. Got status code: {}", status);
-
-                let status_error = Error::new(format!("Failed to upload results. Got status code: {}", status));
-                let bytes = result.bytes().await?;
-                let errors: Vec<models::ResponseError> = match serde_json::from_slice(&bytes) {
-                    Ok(e) => e,
-                    Err(err) => {
-                        error!("Failed to parse error response: {}", err);
-                        return Err(status_error)
-                    }
-                };
-
-                for error in errors {
-                    error!("Got {} error: {}", error.error_code, error.error_message);
-                }
-
-                return Err(status_error);
-            }
-
-            // TODO use the result
-
-            Ok(())*/
         })
     }
 }

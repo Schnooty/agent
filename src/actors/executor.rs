@@ -1,10 +1,10 @@
 use crate::error::Error;
+use crate::monitoring::Monitoring;
 use actix::prelude::*;
+use chrono::prelude::*;
 use futures::stream::FuturesUnordered;
 use openapi_client::models;
 use std::collections::HashSet;
-use chrono::prelude::*;
-use crate::monitoring::Monitoring;
 
 pub struct ExecutorActor<M> {
     monitoring: M,
@@ -17,7 +17,7 @@ impl<M: Monitoring> ExecutorActor<M> {
         Self {
             monitoring,
             busy_monitors: HashSet::new(),
-            recipients, 
+            recipients,
         }
     }
 }
@@ -54,22 +54,29 @@ impl<M: Send + Unpin + 'static> Actor for ExecutorActor<M> {
     }
 }
 
-impl<M: Send + Unpin + 'static> StreamHandler<(models::Monitor, models::MonitorStatus)> for ExecutorActor<M> {
-    fn handle(&mut self, (monitor, status): (models::Monitor, models::MonitorStatus), ctx: &mut Self::Context) {
-        debug!("Got monitor status (monitor={}, status={})", 
-            monitor.name,
-            status.status 
+impl<M: Send + Unpin + 'static> StreamHandler<(models::Monitor, models::MonitorStatus)>
+    for ExecutorActor<M>
+{
+    fn handle(
+        &mut self,
+        (monitor, status): (models::Monitor, models::MonitorStatus),
+        ctx: &mut Self::Context,
+    ) {
+        debug!(
+            "Got monitor status (monitor={}, status={})",
+            monitor.name, status.status
         );
         for r in self.recipients.iter() {
-            ctx.spawn(actix::fut::wrap_future(r.send(StatusMsg { 
-                status: status.clone(),
-                monitor: monitor.clone(),
-            })).map(|result, _, _| {
-                match result {
-                    Ok(_) => {},
-                    Err(err) => error!("Error delivering status msg (error_msg={})", err)
-                }
-            }));
+            ctx.spawn(
+                actix::fut::wrap_future(r.send(StatusMsg {
+                    status: status.clone(),
+                    monitor: monitor.clone(),
+                }))
+                .map(|result, _, _| match result {
+                    Ok(_) => {}
+                    Err(err) => error!("Error delivering status msg (error_msg={})", err),
+                }),
+            );
         }
     }
 }
@@ -116,9 +123,9 @@ impl<M: Monitoring + Send + Unpin + 'static> Handler<ExecuteBatch> for ExecutorA
                                 actual_result: format!("Starting monitor failed: {}", err),
                                 description: format!("Monitor of type {}", monitor_copy.type_),
                                 session: None,
-                                log: Vec::new() 
+                                log: Vec::new(),
                             }
-                        },
+                        }
                     };
                     (monitor_copy, status)
                 }));
@@ -137,5 +144,5 @@ impl<M: Monitoring + Send + Unpin + 'static> Handler<ExecuteBatch> for ExecutorA
 #[rtype(result = "Result<(), Error>")]
 pub struct StatusMsg {
     pub monitor: models::Monitor,
-    pub status: models::MonitorStatus
+    pub status: models::MonitorStatus,
 }

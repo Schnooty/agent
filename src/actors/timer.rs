@@ -1,16 +1,16 @@
-use crate::error::Error;
 use crate::actors::*;
-use std::time::Duration;
+use crate::error::Error;
 use std::collections::HashMap;
+use std::time::Duration;
 
 pub struct TimerActor {
-    schedule: HashMap<String, Receiver>
+    schedule: HashMap<String, Receiver>,
 }
 
 impl TimerActor {
     pub fn new() -> Self {
         Self {
-            schedule: HashMap::new()
+            schedule: HashMap::new(),
         }
     }
 }
@@ -25,7 +25,7 @@ impl Actor for TimerActor {
 
 struct Receiver {
     spec: TimerSpec,
-    interval: SpawnHandle
+    interval: SpawnHandle,
 }
 
 #[derive(Clone, Debug, Message)]
@@ -33,13 +33,13 @@ struct Receiver {
 pub struct TimerSpec {
     pub uid: String,
     pub recipient: Recipient<Timeout>,
-    pub period: Duration 
+    pub period: Duration,
 }
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<(), Error>")]
-pub struct Timeout { 
-    pub uid: String
+pub struct Timeout {
+    pub uid: String,
 }
 
 impl Handler<TimerSpec> for TimerActor {
@@ -48,28 +48,44 @@ impl Handler<TimerSpec> for TimerActor {
     fn handle(&mut self, msg: TimerSpec, ctx: &mut Context<Self>) -> Self::Result {
         // if not already scheduled
         match self.schedule.remove(&msg.uid) {
-            None => if msg.recipient.do_send(Timeout { uid: msg.uid.clone() }).is_ok() {
-                return Err(Error::new(format!("Failed to set timer spec for {}", msg.uid)));
-            },
+            None => {
+                if msg
+                    .recipient
+                    .do_send(Timeout {
+                        uid: msg.uid.clone(),
+                    })
+                    .is_ok()
+                {
+                    return Err(Error::new(format!(
+                        "Failed to set timer spec for {}",
+                        msg.uid
+                    )));
+                }
+            }
             Some(s) => {
                 ctx.cancel_future(s.interval);
-            },
+            }
         }
 
         let rec = msg.recipient.clone();
         let uid_int = msg.uid.clone();
 
         let interval = ctx.run_interval(msg.period, move |_, _| {
-            if let Err(err) = rec.do_send(Timeout { uid: uid_int.clone() }) {
+            if let Err(err) = rec.do_send(Timeout {
+                uid: uid_int.clone(),
+            }) {
                 error!("Error sending timeout to {}: {}", uid_int, err);
             }
         });
 
-        self.schedule.insert(msg.uid.clone(), Receiver {
-            spec: msg,
-            interval
-        });
-        
+        self.schedule.insert(
+            msg.uid.clone(),
+            Receiver {
+                spec: msg,
+                interval,
+            },
+        );
+
         Ok(())
     }
 }

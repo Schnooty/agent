@@ -1,12 +1,12 @@
 #[allow(unused_must_use)]
 use crate::error::Error;
+use crate::monitoring::MonitorFuture;
 use crate::monitoring::MonitorSource;
 use crate::monitoring::MonitorStatusBuilder;
-use crate::monitoring::MonitorFuture;
+use async_std::net::TcpStream;
 use chrono::prelude::*;
 use openapi_client::models;
 use std::fmt::Write;
-use async_std::net::TcpStream;
 
 pub struct TcpMonitor;
 
@@ -26,15 +26,19 @@ impl MonitorSource for TcpMonitor {
                     return {
                         error!("Monitor has no ID (name={})", monitor.name);
 
-                        Err(Error::new("Could not find the ID for this monitor. This is an internal error."))
+                        Err(Error::new(
+                            "Could not find the ID for this monitor. This is an internal error.",
+                        ))
                     }
                 }
             };
-            let mut result_builder = MonitorStatusBuilder::new(&monitor_id, models::MonitorType::TCP, Utc::now());
+            let mut result_builder =
+                MonitorStatusBuilder::new(&monitor_id, models::MonitorType::TCP, Utc::now());
 
             writeln!(result_builder, "Checking monitor configuration");
 
-            result_builder = result_builder.description("Connection to host is successful over TCP".to_string());
+            result_builder =
+                result_builder.description("Connection to host is successful over TCP".to_string());
 
             let hostname_port = match (monitor.body.hostname, monitor.body.port) {
                 (Some(h), Some(p)) => format!("{}:{}", h, p),
@@ -55,17 +59,11 @@ impl MonitorSource for TcpMonitor {
                 Ok(conn) => {
                     writeln!(result_builder, "Connection successfully established.");
                     drop(conn);
-                    Ok(result_builder.ok(
-                        expected,
-                        "Connection was successful",
-                    ))
-                },
+                    Ok(result_builder.ok(expected, "Connection was successful"))
+                }
                 Err(err) => {
                     writeln!(result_builder, "Error connecting to {}", hostname_port);
-                    Ok(result_builder.down(
-                        expected,
-                        format!("Failed to connect: {}", err),
-                    ))
+                    Ok(result_builder.down(expected, format!("Failed to connect: {}", err)))
                 }
             }
         })

@@ -11,40 +11,39 @@ extern crate toml;
 extern crate log;
 extern crate actix;
 extern crate actix_rt;
-extern crate rand;
-#[cfg(test)]
-extern crate test_logger;
-extern crate num_cpus;
+extern crate async_std;
 extern crate hostname;
 extern crate lazy_static;
-extern crate native_tls;
 extern crate lettre_email;
+extern crate native_tls;
+extern crate num_cpus;
+extern crate rand;
 extern crate redis;
 extern crate serde_yaml;
-extern crate async_std;
+#[cfg(test)]
+extern crate test_logger;
 //extern crate http as http_types;
 extern crate async_native_tls;
+extern crate async_trait;
 extern crate base64;
 extern crate reqwest;
-extern crate async_trait;
 
-mod error;
-mod monitoring;
 mod actors;
-mod api;
 mod alerts;
+mod api;
 mod config;
+mod error;
 mod http;
+mod monitoring;
 
-use clap::{AppSettings, Clap};
-use std::time::Duration;
 use crate::actix::Actor;
 use crate::actors::*;
 use crate::api::HttpApi;
 use crate::config::*;
+use clap::{AppSettings, Clap};
 use std::fs::File;
 use std::io::Read;
-
+use std::time::Duration;
 
 #[derive(Clap, Debug)]
 #[clap(version = "0.1.1", author = "Mate Antunovic <mate AT schnooty.com>")]
@@ -81,7 +80,7 @@ async fn main() {
     info!("Parsing config");
 
     match file.read_to_string(&mut contents) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => {
             error!("Failed to load file at {}: {}", config_file_path, err);
             return;
@@ -91,7 +90,10 @@ async fn main() {
     let config: Config = match serde_yaml::from_str(&contents) {
         Ok(c) => c,
         Err(err) => {
-            error!("Failed to parse config file at {}: {}", config_file_path, err);
+            error!(
+                "Failed to parse config file at {}: {}",
+                config_file_path, err
+            );
             return;
         }
     };
@@ -101,13 +103,13 @@ async fn main() {
             debug!("Using {} as base URL", url);
             let api = HttpApi::new(&api::HttpConfig {
                 base_url: url.clone(),
-                api_key: config.api_key.clone()
+                api_key: config.api_key.clone(),
             });
 
             let api_actor = actors::ApiActor::new(api);
             debug!("Starting the API actor");
             Some(api_actor.start())
-        },
+        }
         None => {
             debug!("No base URL supplied. Not going to use API");
             None
@@ -124,10 +126,7 @@ async fn main() {
         let uploader = actors::UploaderActor::new(api_addr.clone());
         let uploader_addr = uploader.start();
 
-        vec![
-            uploader_addr.recipient(),
-            alerter_addr.clone().recipient()
-        ]
+        vec![uploader_addr.recipient(), alerter_addr.clone().recipient()]
     } else {
         info!("No API URL. Statuses will not be uploaded");
         vec![]
@@ -138,10 +137,7 @@ async fn main() {
     let executor_actor = actors::ExecutorActor::new(monitoring, status_recipients);
     let executor_addr = executor_actor.start();
 
-    let scheduler_actor = actors::SchedulerActor::new(vec![
-        executor_addr.recipient()
-    ],
-    timer_addr);
+    let scheduler_actor = actors::SchedulerActor::new(vec![executor_addr.recipient()], timer_addr);
     let scheduler_addr = scheduler_actor.start();
 
     // all the configurators
@@ -151,36 +147,44 @@ async fn main() {
         vec![alerter_addr.recipient()],
     );
 
-    let session_actor = actors::SessionActor::new(
-        vec![]
-    );
+    let session_actor = actors::SessionActor::new(vec![]);
     let session_actor_addr = session_actor.start();
     let configurator_addr = configurator.start();
 
     debug!("Starting the agent with actix");
 
-    match session_actor_addr.send(CurrentConfig { config: config.clone() }).await {
-        Ok(Ok(_)) => { 
+    match session_actor_addr
+        .send(CurrentConfig {
+            config: config.clone(),
+        })
+        .await
+    {
+        Ok(Ok(_)) => {
             info!("Successfully started session");
-        },
+        }
         Ok(Err(err)) => {
             info!("Error starting session: {}", err);
             std::process::exit(1);
-        },
+        }
         Err(err) => {
             info!("Error starting session: {}", err);
             std::process::exit(1);
         }
     };
 
-    match configurator_addr.send(CurrentConfig { config: config.clone() }).await {
-        Ok(Ok(_)) => { 
+    match configurator_addr
+        .send(CurrentConfig {
+            config: config.clone(),
+        })
+        .await
+    {
+        Ok(Ok(_)) => {
             info!("Successfully started session");
-        },
+        }
         Ok(Err(err)) => {
             info!("Error starting session: {}", err);
             std::process::exit(1);
-        },
+        }
         Err(err) => {
             info!("Error starting session: {}", err);
             std::process::exit(1);
@@ -189,6 +193,6 @@ async fn main() {
 
     debug!("Done in the main thread");
     loop {
-         async_std::task::sleep(Duration::new(u64::MAX >> 32, 0)).await;
+        async_std::task::sleep(Duration::new(u64::MAX >> 32, 0)).await;
     }
 }

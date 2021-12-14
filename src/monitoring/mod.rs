@@ -2,10 +2,10 @@ mod monitor_impl;
 
 pub use monitor_impl::*;
 
-use chrono::DateTime;
-use chrono::offset::Utc;
 use crate::error::Error;
 use crate::monitoring::{HttpMonitor, MonitorSource, ProcessMonitor};
+use chrono::offset::Utc;
+use chrono::DateTime;
 use log::*;
 use openapi_client::models;
 use std::fmt;
@@ -28,10 +28,10 @@ pub struct MonitorFutureMaker {
 impl MonitorFutureMaker {
     pub fn new() -> Self {
         Self {
-            http: HttpMonitor { },
-            process: ProcessMonitor { },
-            tcp: TcpMonitor { },
-            redis: RedisMonitor { }
+            http: HttpMonitor {},
+            process: ProcessMonitor {},
+            tcp: TcpMonitor {},
+            redis: RedisMonitor {},
         }
     }
 }
@@ -40,7 +40,7 @@ impl Monitoring for MonitorFutureMaker {
     fn monitor(&mut self, monitor: &models::Monitor) -> MonitorFuture {
         match monitor.type_ {
             models::MonitorType::HTTP => self.http.monitor(monitor),
-            models::MonitorType::PROCESS=> self.process.monitor(monitor),
+            models::MonitorType::PROCESS => self.process.monitor(monitor),
             models::MonitorType::TCP => self.tcp.monitor(monitor),
             models::MonitorType::REDIS => self.redis.monitor(monitor),
         }
@@ -56,13 +56,17 @@ pub struct MonitorStatusBuilder {
 }
 
 impl MonitorStatusBuilder {
-    pub fn new<S: ToString>(monitor_name: S, monitor_type: models::MonitorType, timestamp: DateTime<Utc>) -> Self {
+    pub fn new<S: ToString>(
+        monitor_name: S,
+        monitor_type: models::MonitorType,
+        timestamp: DateTime<Utc>,
+    ) -> Self {
         Self {
             monitor_name: monitor_name.to_string(),
             monitor_type,
             timestamp,
             description: "Description unavailable".to_owned(),
-            log: Vec::new()
+            log: Vec::new(),
         }
     }
 
@@ -81,7 +85,7 @@ impl MonitorStatusBuilder {
             status_id: self.monitor_name, // TODO
             status: models::MonitorStatusIndicator::OK,
             monitor_type: self.monitor_type,
-            timestamp: self.timestamp ,
+            timestamp: self.timestamp,
             expires_at: self.timestamp + chrono::Duration::days(1),
             expected_result: expected.to_string(),
             actual_result: actual.to_string(),
@@ -107,7 +111,7 @@ impl MonitorStatusBuilder {
             actual_result: actual.to_string(),
             description: self.description,
             log: self.log,
-            session: None // TODO
+            session: None, // TODO
         }
     }
 }
@@ -118,7 +122,7 @@ impl fmt::Write for MonitorStatusBuilder {
         for value in s.split(|c| c == '\n') {
             self.log.push(models::MonitorStatusLogEntry {
                 timestamp: Utc::now(),
-                value: value.trim().to_owned() 
+                value: value.trim().to_owned(),
             });
         }
 

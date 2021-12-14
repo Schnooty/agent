@@ -1,6 +1,6 @@
 use crate::actors::*;
-use crate::error::Error;
 use crate::config::Config;
+use crate::error::Error;
 
 pub struct ConfiguratorActor {
     monitor_recipients: Vec<Recipient<MonitorUpdate>>,
@@ -30,7 +30,7 @@ impl Actor for ConfiguratorActor {
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct CurrentConfig {
-    pub config: Config
+    pub config: Config,
 }
 
 impl Handler<CurrentConfig> for ConfiguratorActor {
@@ -48,7 +48,7 @@ impl Handler<CurrentConfig> for ConfiguratorActor {
                 // build the monitor config message
                 let monitor_update = MonitorUpdate {
                     source_id: monitors_uid.clone(),
-                    monitor: monitor.clone() 
+                    monitor: monitor.clone(),
                 };
                 if let Err(_) = monitor_recipient.do_send(monitor_update.clone()) {
                     error!("There was an error delivering monitors");
@@ -58,7 +58,7 @@ impl Handler<CurrentConfig> for ConfiguratorActor {
 
         let alert_update = AlertUpdate {
             uid: alerts_uid,
-            alerts: config_msg.config.alerts
+            alerts: config_msg.config.alerts,
         };
 
         for alert_recipient in &self.alert_recipients {
@@ -67,7 +67,6 @@ impl Handler<CurrentConfig> for ConfiguratorActor {
             }
         }
 
-       
         Ok(())
     }
 }

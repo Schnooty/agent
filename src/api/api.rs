@@ -1,7 +1,7 @@
+use crate::error::Error;
 use openapi_client::models;
 use std::future::Future;
 use std::pin::Pin;
-use crate::error::Error;
 
 pub trait ReadApi {
     fn get_monitors(&self) -> ApiFuture<Vec<models::Monitor>>;

@@ -1,35 +1,34 @@
 use crate::actors::*;
-use actix::Context;
-use std::time::Duration;
+use crate::api::Api;
+use crate::api::{HttpApi, HttpConfig};
 use crate::error::Error;
 use actix::prelude::SpawnHandle;
-use crate::api::{HttpApi, HttpConfig};
+use actix::Context;
 use openapi_client::models;
-use crate::api::Api;
+use std::time::Duration;
 
 const HEARTBEAT_DURATION_SEC: u64 = 30;
 
 pub struct SessionActor {
     heartbeat_handle: Option<SpawnHandle>,
-    session_recipients: Vec<Recipient<SessionInfoMsg>>
+    session_recipients: Vec<Recipient<SessionInfoMsg>>,
 }
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct SessionInfoMsg {
-    pub session: models::Session
+    pub session: models::Session,
 }
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<(), Error>")]
-pub struct SessionState {
-}
+pub struct SessionState {}
 
 impl SessionActor {
     pub fn new(session_recipients: Vec<Recipient<SessionInfoMsg>>) -> Self {
         Self {
             session_recipients,
-            heartbeat_handle: None
+            heartbeat_handle: None,
         }
     }
 }
@@ -67,17 +66,17 @@ impl Handler<CurrentConfig> for SessionActor {
 
         debug!("Using base url {} to initialise session", base_url);
 
-        // initalise the config 
+        // initalise the config
         let http_config = HttpConfig {
             base_url,
-            api_key: config_msg.config.api_key.clone()
+            api_key: config_msg.config.api_key.clone(),
         };
 
         let session_id = config_msg.config.session.name.clone();
 
         let session_msg = SessionTimeout {
             http_config,
-            session_id
+            session_id,
         };
 
         ctx.address().do_send(session_msg.clone());
@@ -114,18 +113,18 @@ impl Handler<SessionTimeout> for SessionActor {
 
                     for recipient in recipients {
                         if let Err(err) = recipient.do_send(SessionInfoMsg {
-                            session: session.clone()
+                            session: session.clone(),
                         }) {
                             error!("Error sending session info msg: {}", err);
                         }
                     }
-                },
-                Err(err) => error!("Error posting heartbeat: {}", err)
+                }
+                Err(err) => error!("Error posting heartbeat: {}", err),
             }
         };
 
         ctx.spawn(actix::fut::wrap_future(heartbeat_future));
-        
+
         Ok(())
     }
 }
@@ -134,5 +133,5 @@ impl Handler<SessionTimeout> for SessionActor {
 #[rtype(result = "Result<(), Error>")]
 struct SessionTimeout {
     session_id: String,
-    http_config: HttpConfig
+    http_config: HttpConfig,
 }

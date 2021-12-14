@@ -4,9 +4,9 @@ use crate::monitoring::MonitorSource;
 use crate::monitoring::MonitorStatusBuilder;
 use chrono::prelude::*;
 use openapi_client::models;
+use std::fmt::Write;
 use std::path::Path;
 use sysinfo::{ProcessExt, System, SystemExt};
-use std::fmt::Write;
 
 pub struct ProcessMonitor;
 
@@ -22,13 +22,18 @@ impl MonitorSource for ProcessMonitor {
         Box::pin(async {
             let monitor_id = match &monitor.id {
                 Some(ref id) => id.to_string(),
-                None => return Err(Error::new("Could not find the ID for this monitor. This is an internal error.")),
+                None => {
+                    return Err(Error::new(
+                        "Could not find the ID for this monitor. This is an internal error.",
+                    ))
+                }
             };
             let absolute_path = match &monitor.body.is_path_absolute {
                 Some(true) => true,
                 _ => false,
             };
-            let builder = MonitorStatusBuilder::new(monitor_id, models::MonitorType::PROCESS, Utc::now());
+            let builder =
+                MonitorStatusBuilder::new(monitor_id, models::MonitorType::PROCESS, Utc::now());
 
             let executable_name = match monitor.body.executable {
                 Some(e) => e,
@@ -86,7 +91,11 @@ impl MonitorSource for ProcessMonitor {
                     _ => continue,
                 };
 
-                writeln!(builder, "Found matching process with cmd: {}", cmd_name.trim());
+                writeln!(
+                    builder,
+                    "Found matching process with cmd: {}",
+                    cmd_name.trim()
+                );
 
                 let is_match = if absolute_path {
                     executable_name == *process_cmd
@@ -124,7 +133,11 @@ impl MonitorSource for ProcessMonitor {
             writeln!(builder, "Checking if total process memory over limit");
 
             if total_ram > max_ram_total {
-                writeln!(builder, "Maximum sum of RAM must be {} bytes or less. I got {} bytes", max_ram_total, total_ram);
+                writeln!(
+                    builder,
+                    "Maximum sum of RAM must be {} bytes or less. I got {} bytes",
+                    max_ram_total, total_ram
+                );
 
                 return Ok(builder.down(
                     format!(
@@ -135,13 +148,23 @@ impl MonitorSource for ProcessMonitor {
                 ));
             }
 
-            writeln!(builder, "Checking that process count not over maximum count");
+            writeln!(
+                builder,
+                "Checking that process count not over maximum count"
+            );
 
             if let Some(minimum_count) = monitor.body.minimum_count {
-                writeln!(&mut builder, "Minimum number of processes is {}. I found {}", minimum_count, total_count);
+                writeln!(
+                    &mut builder,
+                    "Minimum number of processes is {}. I found {}",
+                    minimum_count, total_count
+                );
 
                 if total_count < minimum_count as u32 {
-                    writeln!(&mut builder, "Failing because minimum proceess count not reached");
+                    writeln!(
+                        &mut builder,
+                        "Failing because minimum proceess count not reached"
+                    );
 
                     return Ok(builder.down(
                         format!(
@@ -153,19 +176,26 @@ impl MonitorSource for ProcessMonitor {
                 }
             }
 
-            writeln!(builder, "Checking that process count not below minimum count");
+            writeln!(
+                builder,
+                "Checking that process count not below minimum count"
+            );
 
             if let Some(maximum_count) = monitor.body.maximum_count {
-                writeln!(&mut builder, "Maximum number of processes is {}. I found {}", maximum_count, total_count);
+                writeln!(
+                    &mut builder,
+                    "Maximum number of processes is {}. I found {}",
+                    maximum_count, total_count
+                );
 
                 if maximum_count > total_count as isize {
-                    writeln!(builder, "Failing because number of processes found is over limit");
+                    writeln!(
+                        builder,
+                        "Failing because number of processes found is over limit"
+                    );
 
                     return Ok(builder.down(
-                        format!(
-                            "Found {} or fewer matching process(es)",
-                            maximum_count
-                        ),
+                        format!("Found {} or fewer matching process(es)", maximum_count),
                         format!("Found {} process(es) that match", total_count),
                     ));
                 }

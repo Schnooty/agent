@@ -1,8 +1,8 @@
 #[allow(unused_must_use)]
 use crate::error::Error;
+use crate::monitoring::MonitorFuture;
 use crate::monitoring::MonitorSource;
 use crate::monitoring::MonitorStatusBuilder;
-use crate::monitoring::MonitorFuture;
 use chrono::prelude::*;
 use openapi_client::models;
 use std::fmt::Write;
@@ -33,7 +33,8 @@ impl MonitorSource for HttpMonitor {
                 }
             };*/
 
-            let mut status_builder = MonitorStatusBuilder::new(&monitor.name, models::MonitorType::HTTP, Utc::now());
+            let mut status_builder =
+                MonitorStatusBuilder::new(&monitor.name, models::MonitorType::HTTP, Utc::now());
 
             const EXPECTED: &str = "200-level status code";
 
@@ -45,8 +46,7 @@ impl MonitorSource for HttpMonitor {
                     .map(|m| m.parse() as Result<reqwest::Method, _>),
                 &monitor.body.url,
             ) {
-                let mut builder = reqwest::Client::new()
-                    .request(method.clone(), url);
+                let mut builder = reqwest::Client::new().request(method.clone(), url);
 
                 for header in monitor.body.headers.unwrap_or_default().iter() {
                     builder = builder.header(&header.name, &header.value);
@@ -56,7 +56,7 @@ impl MonitorSource for HttpMonitor {
 
                 let body = match monitor.body.body {
                     Some(ref b) => b.clone(),
-                    None => String::new()
+                    None => String::new(),
                 };
 
                 (
@@ -76,7 +76,11 @@ impl MonitorSource for HttpMonitor {
                     None => "<missing>".to_owned(),
                 };
 
-                writeln!(result_builder, "Monitor configuration (method={}, url={})", method, url);
+                writeln!(
+                    result_builder,
+                    "Monitor configuration (method={}, url={})",
+                    method, url
+                );
 
                 return Ok(result_builder.down(
                     EXPECTED,
@@ -96,7 +100,11 @@ impl MonitorSource for HttpMonitor {
                 }
             };
 
-            writeln!(status_builder, "Response status code: {}", response.status().to_string().trim());
+            writeln!(
+                status_builder,
+                "Response status code: {}",
+                response.status().to_string().trim()
+            );
 
             if response.status().is_success() {
                 writeln!(status_builder, "Response status code is success.\n All OK");

@@ -1,11 +1,11 @@
 use crate::error::Error;
+use crate::monitoring::MonitorFuture;
 use crate::monitoring::MonitorSource;
 use crate::monitoring::MonitorStatusBuilder;
-use crate::monitoring::MonitorFuture;
 use chrono::prelude::*;
 use openapi_client::models;
-use redis::{ConnectionInfo, RedisConnectionInfo, ConnectionAddr, Client};
 use redis;
+use redis::{Client, ConnectionAddr, ConnectionInfo, RedisConnectionInfo};
 use std::fmt::Write;
 
 pub struct RedisMonitor;
@@ -25,22 +25,29 @@ impl MonitorSource for RedisMonitor {
                     return {
                         error!("Monitor has no ID (name={})", monitor.name);
 
-                        Err(Error::new("Could not find the ID for this monitor. This is an internal error."))
+                        Err(Error::new(
+                            "Could not find the ID for this monitor. This is an internal error.",
+                        ))
                     }
                 }
             };
 
-            let mut result_builder = MonitorStatusBuilder::new(&monitor_id, models::MonitorType::REDIS, Utc::now());
+            let mut result_builder =
+                MonitorStatusBuilder::new(&monitor_id, models::MonitorType::REDIS, Utc::now());
 
             // set up parameters
             let host = monitor.body.hostname.unwrap(); // TODO
             let port = monitor.body.port.unwrap(); // TODO;
-            let db = monitor.body.db.map(|i| i as i64).ok_or(Error::new("Redis monitor is missing `db` property"))?;
+            let db = monitor
+                .body
+                .db
+                .map(|i| i as i64)
+                .ok_or(Error::new("Redis monitor is missing `db` property"))?;
             let username = monitor.body.username;
             let password = monitor.body.password;
             let constraints = match monitor.body.constraints {
                 Some(c) => c,
-                None => vec![]
+                None => vec![],
             };
 
             let connection_info = ConnectionInfo {
@@ -48,12 +55,16 @@ impl MonitorSource for RedisMonitor {
                 redis: RedisConnectionInfo {
                     db,
                     username,
-                    password
-                }
+                    password,
+                },
             };
 
-            // connect to redis    
-            writeln!(&mut result_builder, "Opening connection to redis on {}:{}", host, port);
+            // connect to redis
+            writeln!(
+                &mut result_builder,
+                "Opening connection to redis on {}:{}",
+                host, port
+            );
             let mut conn = Client::open(connection_info)?;
             // authenticate if necessary
             /*const AUTH: &'static str = "AUTH";
@@ -79,35 +90,52 @@ impl MonitorSource for RedisMonitor {
             writeln!(&mut result_builder, "Loading data using INFO command");
             // load data and parse
             let info_dict: redis::InfoDict = redis::cmd(INFO).query(&mut conn)?;
-            
-            writeln!(&mut result_builder, "Successfully loaded INFO data. Now checking {} constraints.", constraints.len());
+
+            writeln!(
+                &mut result_builder,
+                "Successfully loaded INFO data. Now checking {} constraints.",
+                constraints.len()
+            );
             // build result from constraints
-            let failed_constraints: Vec<_> = constraints.iter().filter_map(|constraint| {
-                writeln!(
-                    &mut result_builder,
-                    "Checking if {} {} '{}'",
-                    constraint.name,
-                    constraint.operator,
-                    constraint.value
-                );
-                let field_value_option: Option<String> = info_dict.get(&constraint.name);
-                if let Some(field_value) = field_value_option {
-                    // now apply operator
-                    let apply = Apply { 
-                        operator: constraint.operator
-                    };
-                    if !apply.apply(&field_value, &constraint.value) {
-                        writeln!(&mut result_builder, "Constraint check FAILED. Value of '{}' {} {}", constraint.name, constraint.operator, field_value);
-                        Some(constraint.name.to_owned())
+            let failed_constraints: Vec<_> = constraints
+                .iter()
+                .filter_map(|constraint| {
+                    writeln!(
+                        &mut result_builder,
+                        "Checking if {} {} '{}'",
+                        constraint.name, constraint.operator, constraint.value
+                    );
+                    let field_value_option: Option<String> = info_dict.get(&constraint.name);
+                    if let Some(field_value) = field_value_option {
+                        // now apply operator
+                        let apply = Apply {
+                            operator: constraint.operator,
+                        };
+                        if !apply.apply(&field_value, &constraint.value) {
+                            writeln!(
+                                &mut result_builder,
+                                "Constraint check FAILED. Value of '{}' {} {}",
+                                constraint.name, constraint.operator, field_value
+                            );
+                            Some(constraint.name.to_owned())
+                        } else {
+                            writeln!(
+                                &mut result_builder,
+                                "Constraint check OK. Value of '{}' {} {}",
+                                constraint.name, constraint.operator, field_value
+                            );
+                            None
+                        }
                     } else {
-                        writeln!(&mut result_builder, "Constraint check OK. Value of '{}' {} {}", constraint.name, constraint.operator, field_value);
-                        None
+                        writeln!(
+                            &mut result_builder,
+                            "Failed to find field '{}'",
+                            constraint.name
+                        );
+                        Some(constraint.name.to_owned())
                     }
-                } else {
-                    writeln!(&mut result_builder, "Failed to find field '{}'", constraint.name);
-                    Some(constraint.name.to_owned())
-                }
-            }).collect();
+                })
+                .collect();
 
             Ok(if failed_constraints.len() == 0 {
                 result_builder.ok("0 failed constraints", "Zero failed constraints")
@@ -120,7 +148,7 @@ impl MonitorSource for RedisMonitor {
 
 /// Implementation of comparison operator for stringly types.
 struct Apply {
-    operator: models::CmpOperator
+    operator: models::CmpOperator,
 }
 
 impl Apply {
@@ -129,17 +157,16 @@ impl Apply {
             models::CmpOperator::EQ => lhs == rhs,
             models::CmpOperator::NE => lhs != rhs,
             _ => {
-                let l = i64::from_str_radix(lhs, 10).unwrap();// TODO
+                let l = i64::from_str_radix(lhs, 10).unwrap(); // TODO
                 let r = i64::from_str_radix(rhs, 10).unwrap();
                 match self.operator {
                     models::CmpOperator::LT => l < r,
                     models::CmpOperator::LE => l <= r,
                     models::CmpOperator::GT => l > r,
                     models::CmpOperator::GE => l >= r,
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 }
-            },
+            }
         }
     }
 }
-

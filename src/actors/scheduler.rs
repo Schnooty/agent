@@ -1,21 +1,21 @@
+use crate::actors::TimerActor;
 use crate::actors::*;
 use crate::error::Error;
 use actix::clock::Instant;
 use log::*;
 use openapi_client::models;
-use std::time;
-use crate::actors::TimerActor;
 use std::collections::HashMap;
+use std::time;
 
 pub struct SchedulerActor {
     monitors: HashMap<String, MonitorContainer>,
     recipients: Vec<Recipient<ExecuteBatch>>,
-    timer: Addr<TimerActor>
+    timer: Addr<TimerActor>,
 }
 
 struct MonitorContainer {
     uid: String,
-    monitor: models::Monitor
+    monitor: models::Monitor,
 }
 
 impl Actor for SchedulerActor {
@@ -31,10 +31,9 @@ impl SchedulerActor {
         Self {
             monitors: HashMap::new(),
             recipients,
-            timer
+            timer,
         }
     }
-
 }
 
 #[derive(Clone, Debug, Message)]
@@ -53,10 +52,13 @@ impl Handler<MonitorUpdate> for SchedulerActor {
 
         debug!("Handling monitor update");
 
-        self.monitors.insert(uid.clone(), MonitorContainer {
-            uid: uid.clone(),
-            monitor: msg.monitor.clone()
-        });
+        self.monitors.insert(
+            uid.clone(),
+            MonitorContainer {
+                uid: uid.clone(),
+                monitor: msg.monitor.clone(),
+            },
+        );
 
         let recipient = ctx.address().recipient();
         let period = get_duration(&msg.monitor);
@@ -64,7 +66,7 @@ impl Handler<MonitorUpdate> for SchedulerActor {
         self.timer.do_send(TimerSpec {
             uid,
             recipient,
-            period
+            period,
         });
 
         Ok(())
@@ -77,10 +79,15 @@ impl Handler<Timeout> for SchedulerActor {
     fn handle(&mut self, msg: Timeout, _ctx: &mut Context<Self>) -> Self::Result {
         debug!("Waking up scheduler");
 
-        match self.monitors.iter().filter(|(ref uid, _)| *uid == &msg.uid).next() {
+        match self
+            .monitors
+            .iter()
+            .filter(|(ref uid, _)| *uid == &msg.uid)
+            .next()
+        {
             Some((_, ref container)) => {
                 let message = ExecuteBatch {
-                    monitors: vec![container.monitor.clone()]
+                    monitors: vec![container.monitor.clone()],
                 };
                 for recv in self.recipients.iter() {
                     if !recv.do_send(message.clone()).is_ok() {
@@ -88,13 +95,12 @@ impl Handler<Timeout> for SchedulerActor {
                     }
                 }
                 Ok(())
-            },
+            }
             None => {
                 debug!("Got timeout for {} but this monitor not found", msg.uid);
                 Ok(())
             }
         }
-
     }
 }
 
@@ -137,7 +143,7 @@ fn to_milliseconds(time: &str) -> i32 {
 #[derive(Clone)]
 struct ScheduleEvent {
     timestamp: Instant,
-    monitor_name: String
+    monitor_name: String,
 }
 
 pub const MILLI: i32 = 1;

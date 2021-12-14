@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use openapi_client::models;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
@@ -13,7 +13,7 @@ pub struct Config {
     #[serde(default)]
     pub alerts: Vec<models::Alert>,
     pub status: StatusSink,
-    pub session: SessionInfo
+    pub session: SessionInfo,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -21,7 +21,10 @@ pub enum MonitorSource {
     #[serde(rename = "file")]
     File { path: String },
     #[serde(rename = "api")]
-    Api { base_url: Option<String>, api_key: Option<String> },
+    Api {
+        base_url: Option<String>,
+        api_key: Option<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -29,20 +32,23 @@ pub enum AlertSource {
     #[serde(rename = "file")]
     File { path: String },
     #[serde(rename = "api")]
-    Api { base_url: Option<String>, api_key: Option<String> },
+    Api {
+        base_url: Option<String>,
+        api_key: Option<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StatusSink {
     pub base_url: Option<String>,
     pub api_key: Option<String>,
-    pub enabled: bool
+    pub enabled: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SessionInfo {
     pub name: String,
-    pub enabled: bool
+    pub enabled: bool,
 }
 
 /*impl Default for Config {
