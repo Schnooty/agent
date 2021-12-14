@@ -22,7 +22,7 @@ impl MonitorSource for HttpMonitor {
         let monitor = monitor.clone();
 
         Box::pin(async {
-            let monitor_id = match monitor.id {
+            /*let monitor_id = match monitor.id {
                 Some(m) => m.to_string(),
                 None => {
                     return {
@@ -31,9 +31,9 @@ impl MonitorSource for HttpMonitor {
                         Err(Error::new("Could not find the ID for this monitor. This is an internal error."))
                     }
                 }
-            };
+            };*/
 
-            let mut status_builder = MonitorStatusBuilder::new(&monitor_id, models::MonitorType::HTTP, Utc::now());
+            let mut status_builder = MonitorStatusBuilder::new(&monitor.name, models::MonitorType::HTTP, Utc::now());
 
             const EXPECTED: &str = "200-level status code";
 

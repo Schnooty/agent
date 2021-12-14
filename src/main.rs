@@ -26,6 +26,7 @@ extern crate async_std;
 extern crate async_native_tls;
 extern crate base64;
 extern crate reqwest;
+extern crate async_trait;
 
 mod error;
 mod monitoring;
@@ -115,6 +116,7 @@ async fn main() {
 
     debug!("Starting the Actix system");
 
+    let timer_addr = actors::TimerActor::new().start();
     let alerter = actors::AlerterActor::new(alerts::AlertApiImpl::new());
     let alerter_addr = alerter.start();
 
@@ -138,7 +140,8 @@ async fn main() {
 
     let scheduler_actor = actors::SchedulerActor::new(vec![
         executor_addr.recipient()
-    ]);
+    ],
+    timer_addr);
     let scheduler_addr = scheduler_actor.start();
 
     // all the configurators

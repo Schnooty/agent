@@ -12,10 +12,6 @@ pub struct Config {
     pub monitors: Vec<models::Monitor>,
     #[serde(default)]
     pub alerts: Vec<models::Alert>,
-    //#[serde(rename = "monitorSources")]
-    //pub monitor_sources: Vec<MonitorSource>,
-    //#[serde(rename = "alertSources")]
-    //pub alert_sources: Vec<AlertSource>,
     pub status: StatusSink,
     pub session: SessionInfo
 }

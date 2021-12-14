@@ -43,15 +43,16 @@ impl Handler<CurrentConfig> for ConfiguratorActor {
         let monitors_uid = format!("config://monitors"); // yes it is a URI
         let alerts_uid = format!("config://alerts"); // yes it is a URI
 
-        // build the monitor config message
-        let monitor_update = MonitorUpdate {
-            uid: monitors_uid,
-            monitors: config_msg.config.monitors
-        };
-
         for monitor_recipient in &self.monitor_recipients {
-            if let Err(_) = monitor_recipient.do_send(monitor_update.clone()) {
-                error!("There was an error delivering monitors");
+            for monitor in config_msg.config.monitors.iter() {
+                // build the monitor config message
+                let monitor_update = MonitorUpdate {
+                    source_id: monitors_uid.clone(),
+                    monitor: monitor.clone() 
+                };
+                if let Err(_) = monitor_recipient.do_send(monitor_update.clone()) {
+                    error!("There was an error delivering monitors");
+                }
             }
         }
 

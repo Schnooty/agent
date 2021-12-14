@@ -4,15 +4,18 @@ use actix::clock::Instant;
 use log::*;
 use openapi_client::models;
 use std::time;
-use core::time::Duration;
+use crate::actors::TimerActor;
+use std::collections::HashMap;
 
 pub struct SchedulerActor {
-    monitors: Vec<models::Monitor>,
-    started_at: Instant,
-    log: Vec<ScheduleEvent>,
+    monitors: HashMap<String, MonitorContainer>,
     recipients: Vec<Recipient<ExecuteBatch>>,
-    schedule_interval: Option<SpawnHandle>,
-    schedule_events: Vec<ScheduleEvent>
+    timer: Addr<TimerActor>
+}
+
+struct MonitorContainer {
+    uid: String,
+    monitor: models::Monitor
 }
 
 impl Actor for SchedulerActor {
@@ -24,14 +27,11 @@ impl Actor for SchedulerActor {
 }
 
 impl SchedulerActor {
-    pub fn new(recipients: Vec<Recipient<ExecuteBatch>>) -> Self {
+    pub fn new(recipients: Vec<Recipient<ExecuteBatch>>, timer: Addr<TimerActor>) -> Self {
         Self {
-            monitors: vec![],
-            started_at: Instant::now(),
-            log: Vec::new(),
+            monitors: HashMap::new(),
             recipients,
-            schedule_interval: None,
-            schedule_events: Vec::new()
+            timer
         }
     }
 
@@ -41,99 +41,60 @@ impl SchedulerActor {
 #[rtype(result = "Result<(), Error>")]
 pub struct MonitorUpdate {
     /// Uniquely identifies this set of monitors
-    pub uid: String,
-    pub monitors: Vec<models::Monitor>,
+    pub source_id: String,
+    pub monitor: models::Monitor,
 }
 
 impl Handler<MonitorUpdate> for SchedulerActor {
     type Result = Result<(), Error>;
 
     fn handle(&mut self, msg: MonitorUpdate, ctx: &mut Context<Self>) -> Self::Result {
+        let uid = format!("https://api.schnooty.com/monitors/{}", msg.monitor.name);
+
         debug!("Handling monitor update");
 
-        const NANO_MILLI_RATIO: u32 = 1000 * 1000;
+        self.monitors.insert(uid.clone(), MonitorContainer {
+            uid: uid.clone(),
+            monitor: msg.monitor.clone()
+        });
 
-        let mut intervals: Vec<u32> = msg.monitors
-            .iter()
-            .map(|m| to_milliseconds(&m.period).abs() as u32)
-            .collect();
+        let recipient = ctx.address().recipient();
+        let period = get_duration(&msg.monitor);
 
-        intervals.sort();
-
-        self.monitors = msg.monitors;
-
-        let mut new_spawn = if intervals.len() > 0 {
-            let period_milliseconds = intervals[0] * NANO_MILLI_RATIO;
-
-            let spawn_process = move |_: &mut SchedulerActor, ctx: &mut Context<Self>| {
-                debug!("Schedule timeout.");
-                let address = ctx.address();
-                address.do_send(ScheduleTimeout { period_milliseconds });
-            };
-            
-            ctx.address().do_send(ScheduleTimeout { period_milliseconds });
-
-            Some(ctx.run_interval(Duration::new(0, period_milliseconds), spawn_process))
-        } else {
-            None
-        };
-
-        std::mem::swap(&mut new_spawn, &mut self.schedule_interval);
-
+        self.timer.do_send(TimerSpec {
+            uid,
+            recipient,
+            period
+        });
 
         Ok(())
     }
 }
 
-
-#[derive(Clone, Debug, Message)]
-#[rtype(result = "Result<(), Error>")]
-pub struct ScheduleTimeout {
-    period_milliseconds: u32
-}
-
-impl Handler<ScheduleTimeout> for SchedulerActor {
+impl Handler<Timeout> for SchedulerActor {
     type Result = Result<(), Error>;
 
-    fn handle(&mut self, _msg: ScheduleTimeout, _ctx: &mut Context<Self>) -> Self::Result {
-        let now = Instant::now();
-
+    fn handle(&mut self, msg: Timeout, _ctx: &mut Context<Self>) -> Self::Result {
         debug!("Waking up scheduler");
 
-        let next: Vec<_> = self.monitors.iter()
-            .map(|monitor| match self.schedule_events.iter()
-                    .filter(|s| s.monitor_name == monitor.name)
-                    .next() {
-                    None => (monitor, Duration::new(u64::max_value(), 0), get_duration(&monitor)),
-                    Some(ScheduleEvent { 
-                        monitor_name: _,
-                        timestamp
-                    }) => (monitor, now - *timestamp, get_duration(&monitor))
+        match self.monitors.iter().filter(|(ref uid, _)| *uid == &msg.uid).next() {
+            Some((_, ref container)) => {
+                let message = ExecuteBatch {
+                    monitors: vec![container.monitor.clone()]
+                };
+                for recv in self.recipients.iter() {
+                    if !recv.do_send(message.clone()).is_ok() {
+                        // do nothing
+                    }
                 }
-            )
-            .filter(|(_, elapsed_time, period)| elapsed_time >= period)
-            .map(|(monitor, _, _)| (monitor.clone(), ScheduleEvent { timestamp: now, monitor_name: monitor.name.clone() }))
-            .collect();
-
-        let message = ExecuteBatch {
-            monitors: next.iter().map(|(m, _)| m.clone()).collect()
-        };
-
-        debug!("Scheduling {} monitor(s)", message.monitors.len());
-
-        let mut events: Vec<ScheduleEvent> = next.iter().cloned().map(|(_, s)| s).collect();
-        events.append(&mut self.schedule_events);
-        self.schedule_events = events;
-
-        for recipient in self.recipients.iter() {
-            if let Err(err) = recipient.do_send(message.clone()) {
-                error!("Error sending monitor batch: {}", err);
+                Ok(())
+            },
+            None => {
+                debug!("Got timeout for {} but this monitor not found", msg.uid);
+                Ok(())
             }
         }
 
-        self.schedule_events.dedup_by_key(|m| m.monitor_name.clone());
-
-        Ok(())
     }
 }
 

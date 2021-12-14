@@ -1,5 +1,7 @@
-use crate::api::{ReadApi, ApiFuture};
+use crate::api::ReadApi;
 use openapi_client::models;
+use async_trait::async_trait;
+use crate::error::Error;
 
 pub struct FileApi;
 
@@ -9,12 +11,13 @@ impl FileApi {
     }
 }
 
+#[async_trait]
 impl ReadApi for FileApi {
-    fn get_monitors(&self) -> ApiFuture<Vec<models::Monitor>> {
+    async fn get_monitors(&self) -> Result<Vec<models::Monitor>, Error> {
         unimplemented!()
     }
 
-    fn get_alerts(&self) -> ApiFuture<Vec<models::Alert>> {
+    async fn get_alerts(&self) -> Result<Vec<models::Alert>, Error> {
         unimplemented!()
     }
 }

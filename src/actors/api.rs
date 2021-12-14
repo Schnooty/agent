@@ -3,87 +3,122 @@ use crate::error::Error;
 use actix::prelude::ResponseFuture;
 use actix::prelude::*;
 use openapi_client::models;
+use async_trait::async_trait;
+use futures::FutureExt;
 
 use std::marker::Unpin;
 
-pub struct ApiActor<A: Api> {
-    api: A,
+pub struct ApiActor {
+    api: Box<dyn Api + 'static>,
 }
 
-impl<A: Api> ApiActor<A> {
-    pub fn new(api: A) -> Self {
-        Self { api }
+impl ApiActor {
+    pub fn new<A: Api + 'static + Unpin>(api: A) -> Self {
+         Self { api: Box::new(api) }
     }
 }
 
-impl<A: Api + Unpin + 'static> Actor for ApiActor<A> {
+impl Actor for ApiActor {
     type Context = Context<Self>;
 }
 
 #[derive(Message)]
-#[rtype(result = "Result<Vec<models::Monitor>, Error>")]
+#[rtype(result = "Result<RequestHandle, Error>")]
 pub struct GetMonitors;
 
+pub struct RequestHandle {
+    pub id: usize
+}
+
+impl RequestHandle {
+    fn new() -> Self {
+        RequestHandle {
+            id: 0
+        }
+    }
+}
+
 #[derive(Message)]
-#[rtype(result = "Result<models::Session, Error>")]
+#[rtype(result = "Result<RequestHandle, Error>")]
 pub struct SessionHeartbeat {
     pub session_id: String,
     pub agent_id: String,
 }
 
-impl<A: Api + Unpin + 'static> Handler<GetMonitors> for ApiActor<A> {
-    type Result = ResponseFuture<Result<Vec<models::Monitor>, Error>>;
+#[derive(Message)]
+#[rtype(result = "Result<RequestHandle, Error>")]
+pub struct GetAlerts;
 
-    fn handle(&mut self, _msg: GetMonitors, _ctx: &mut Self::Context) -> Self::Result {
-        self.api.get_monitors()
-        //Box::pin(actix::fut::wrap_future::<_, Self>(self.api.get_monitors()))
+impl Handler<GetMonitors> for ApiActor {
+    type Result = Result<RequestHandle, Error>;
+
+    fn handle(&mut self, _msg: GetMonitors, ctx: &mut Self::Context) -> Self::Result {
+        let handle = RequestHandle::new();
+        let future = self.api.get_monitors()
+            .map(|_| ());
+        ctx.spawn(future.into_actor(self));
+        Ok(handle)
+        //Box::pin(actix::fut::wrap_future::<_, _>())
+        //Box::pin(actix::fut::wrap_future::<_, _>(self.api.get_monitors()))
+        //Box::pin(self.api.get_monitors()))
+        //let monitor_future = self.api.get_monitors();
+        //monitor_future
+        //Box::pin(async {
+        //    Ok(Vec::new())
+        //})
+        //.into_actor(self)
+        /*Box::pin(
+            //async {
+                // Some async computation
+            //    42
+            //}
+            monitor_future
+            .into_actor(self) // converts future to ActorFuture
+            .map(|_res, _act, _ctx| {
+                // Do some computation with actor's state or context
+                Ok(vec![])
+            }),
+        )*/
+        //let monitors = self.api.get_monitors();
+        //Box::pin(
+        //    monitors
+        //    .into_actor(self) // converts future to ActorFuture
+        //)
+        //Box::pin(async {
+        //    Ok(monitors.await)
+        //})
     }
 }
 
-impl<A: Api + Unpin + 'static> Handler<GetAlerts> for ApiActor<A> {
-    type Result = ResponseFuture<Result<Vec<models::Alert>, Error>>;
+impl Handler<GetAlerts> for ApiActor {
+    type Result = Result<RequestHandle, Error>;
 
-    fn handle(&mut self, _msg: GetAlerts, _ctx: &mut Self::Context) -> Self::Result {
-        self.api.get_alerts()
+    fn handle(&mut self, _msg: GetAlerts, ctx: &mut Self::Context) -> Self::Result {
+        let alerts = self.api.get_alerts();
+        //Box::pin(
+        //   alerts 
+        //    .into_actor(self) // converts future to ActorFuture
+        //)
     }
 }
 
-impl<A: Api + Unpin + 'static> Handler<SessionHeartbeat> for ApiActor<A> {
-    type Result = ResponseActFuture<Self, Result<models::Session, Error>>;
+impl Handler<SessionHeartbeat> for ApiActor {
+    type Result = ();//ResponseActFuture<Self, Result<models::Session, Error>>;
 
     fn handle(&mut self, msg: SessionHeartbeat, _ctx: &mut Self::Context) -> Self::Result {
-        Box::pin(
-            actix::fut::wrap_future::<_, Self>(
-                self.api.post_heartbeat(&msg.session_id),
-            )
-            .map(|result, _, _| {
-                debug!("Result from post_heartbeat: {:?}", result);
-                result
-            }),
-        )
+        //Box::pin(actix::fut::wrap_future::<_, Self>(self.api.post_heartbeat(&msg.session_id)))
+        //todo!()
     }
 }
 
-impl<A: Api + Unpin + 'static> Handler<PostStatuses> for ApiActor<A> {
-    type Result = ResponseActFuture<Self, Result<(), Error>>;
+impl Handler<PostStatuses> for ApiActor {
+    type Result = ();//ResponseActFuture<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: PostStatuses, _ctx: &mut Self::Context) -> Self::Result {
-        Box::pin(
-            actix::fut::wrap_future::<_, Self>(
-                self.api.post_statuses(&msg.statuses),
-            )
-            .map(|result, _, _| {
-                debug!("Result from post_heartbeat: {:?}", result);
-                
-                Ok(())
-            }),
-        )
+        //Box::pin(actix::fut::wrap_future::<_, Self>(self.api.post_statuses(&msg.statuses)))
+        todo!()
     }
 }
-
-#[derive(Message)]
-#[rtype(result = "Result<Vec<models::Alert>, Error>")]
-pub struct GetAlerts;
 
 #[derive(Message)]
 #[rtype(result = "Result<(), Error>")]

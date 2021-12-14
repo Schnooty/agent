@@ -1,20 +1,19 @@
 use actix::prelude::*;
 use crate::actors::*;
-use crate::api::HttpApi;
 use crate::error::Error;
 use openapi_client::models;
 use std::time;
 use std::collections::HashSet;
 
 pub struct UploaderActor {
-    api_addr: Addr<ApiActor<HttpApi>>,
+    api_addr: Addr<ApiActor>,
     buffer: Vec<models::MonitorStatus>,
     last_upload_started: Option<time::Instant>,
     interval: Option<SpawnHandle>,
 }
 
 impl UploaderActor {
-    pub fn new(api_addr: Addr<ApiActor<HttpApi>>) -> Self {
+    pub fn new(api_addr: Addr<ApiActor>) -> Self {
         Self {
             api_addr,
             buffer: vec![],
