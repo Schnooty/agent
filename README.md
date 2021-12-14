@@ -1,23 +1,15 @@
 ### 
 # Schnooty Agent
 
-Monitor everything using Schnooty Agent. Once you set things up on [schnooty.com](https://schnooty.com), you can get started
-monitoring your servers, databases, and infrastructure.
-
-## Description
-
-Schnooty Agent runs in the background and monitors whatever you tell it to. The agent automatically keeps itself updated itself with the monitors and alerts you
-set up. 
+Monitor everything using Schnooty Agent. Schnooty runs in the background and monitors whatever you tell it to. For example, your HTTP server. If it detects a problem, Schnooty can send you an alert. For example, in an email. Schnooty Agent is for developers who want efficient monitoring that is easy to set up.
 
 ## Getting Started
 
-Before running the agent, you will need a [Schnooty account](https://www.schnooty.com). You must set up an API key for the agent you are running.
-Then you add some monitors and alerts which the agent will pick up and run.
-
+If you want to view your monitoring activity at [schnooty.com](https://www.schnooty.com), you will need to set up an account. Set up an API key for your agent. Then add your alerts to the agent's `config.yaml`.
 
 ### Dependencies
 
-Schnooty Agent has binaries for Linux. You can also compile and run from source. Support for Windows binaries is set for a future date.
+Schnooty Agent has binaries for Linux. You can also compile and run from source. Support for Windows binaries is not currently available.
 
 Linux
 * OpenSSL v1.1.1 or greater.
@@ -29,16 +21,26 @@ Download the latest binaries on GitHub from [the releases page](https://github.c
 
 Schnooty is released only as a standalone binary. You can configure it as [System V service](https://www.digitalocean.com/community/tutorials/how-to-configure-a-linux-service-to-start-automatically-after-a-crash-or-reboot-part-1-practical-examples) or Windows service.
 
+### Running it
 
-### Executing program
-
-Ensure that you set up the `api_key` property in `config.toml`. You need this for the agent to load its set up 
-from `api.schnooty.com`. You also need `group_id`. Agents in the same group will divide monitors between themselves, ensuring that
-no two agents share the same monitor. This feature will be removed in a future version of the agent and Schnooty API.
+Ensure that you set up the `api_key` property in `config.yaml`. You need this for the agent to connect to the Schnooty API. 
 
 ```
-api_key = "YOUR_API_KEY"
-group_id = "main"
+base_url: "http://localhost:3001/"
+api_key: 90aa9eb6bfad4512959c854922f669e7:2314KyCx8CytA2vKsfR8vGfAl7WBfa
+monitors: 
+  - name: website-monitor
+    type: http
+    enabled: true
+    period: 1m
+    timeout: 5s
+    body:
+      url: https://www.mywebsite.com
+status:
+  enabled: true
+session:
+  name: test-name-session
+  enabled: true
 ```
 
 Ensure that `config.toml` is in the same directory as the `schnooty` executable. 
