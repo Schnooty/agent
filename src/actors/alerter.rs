@@ -115,7 +115,7 @@ impl Handler<StatusMsg> for AlerterActor {
     type Result = Result<(), Error>;
 
     fn handle(&mut self, msg: StatusMsg, ctx: &mut Self::Context) -> Self::Result {
-        debug!("Received status update(s) (monitor_name={}, status={}", msg.monitor.id.clone().unwrap(), msg.status.status);
+        debug!("Received status update(s) (monitor_name={}, status={}", msg.monitor.name, msg.status.status);
         self.status_buffer.push((msg.monitor, msg.status));
         self.process_state_change(ctx);
 

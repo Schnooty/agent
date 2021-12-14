@@ -71,24 +71,23 @@ impl UploaderActor {
 
         // send message to API actor
         debug!("Uploading statuses (statuses_len={})", statuses.len());
-        let request = self.api_addr.send(PostStatuses { statuses: statuses.clone() });
+        self.api_addr.do_send(StatusUpdatesRequest { 
+            recipient: vec![],
+            statuses: statuses.clone() 
+        });
 
-        ctx.spawn(
-            actix::fut::wrap_future::<_, Self>(request).map(move |result, this, _| {
-                match result {
-                    Ok(_) => {
-                        debug!("Upload was successful");
-                    },
-                    Err(err) => {
-                        error!("Error while uploading: {}", err);
-                        debug!("Putting these statuses back on the buffer");
-                        for status in statuses.into_iter() {
-                            this.buffer.insert(0, status);
-                        }
-                    }
+        /*match request {
+            Ok(_) => {
+                debug!("Upload was successful");
+            },
+            Err(err) => {
+                error!("Error while uploading: {}", err);
+                debug!("Putting these statuses back on the buffer");
+                for status in statuses.into_iter() {
+                    this.buffer.insert(0, status);
                 }
-            })
-        );
+            }
+        }*/
     }
 }
 

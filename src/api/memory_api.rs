@@ -1,7 +1,5 @@
 use crate::api::{ReadApi, ApiFuture};
 use openapi_client::models;
-use async_trait::async_trait;
-use crate::error::Error;
 
 pub struct MemoryApi {
     monitors: Vec<models::Monitor>,
@@ -20,17 +18,20 @@ impl MemoryApi {
     }
 }
 
-#[async_trait]
 impl ReadApi for MemoryApi {
-    async fn get_monitors(&self) -> Result<Vec<models::Monitor>, Error> {
+    fn get_monitors(&self) -> ApiFuture<Vec<models::Monitor>> {
         let monitors = self.monitors.clone();
 
-        Ok(monitors)
+        Box::pin(async move {
+            Ok(monitors)
+        })
     }
 
-    async fn get_alerts(&self) -> Result<Vec<models::Alert>, Error> {
+    fn get_alerts(&self) -> ApiFuture<Vec<models::Alert>> {
         let alerts = self.alerts.clone();
 
-        Ok(alerts)
+        Box::pin(async move {
+            Ok(alerts)
+        })
     }
 }
