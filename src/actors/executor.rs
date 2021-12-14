@@ -94,27 +94,34 @@ impl<M: Monitoring + Send + Unpin + 'static> Handler<ExecuteBatch> for ExecutorA
             if !self.busy_monitors.contains(monitor_name) {
                 let monitor_copy = monitor.clone();
                 let fut = self.monitoring.monitor(&monitor_copy);
+
+                let monitor_name = monitor_copy.name.clone();
+                let monitor_type = monitor.type_;
+                let status_id = monitor.name;
+
+                report.monitors_started.push(monitor_name.to_owned());
                 monitor_futures.push(Box::pin(async move {
                     let timestamp = Utc::now();
                     let status = match fut.await {
                         Ok(s) => s,
                         Err(err) => {
                             models::MonitorStatus {
-                                monitor_id: monitor_copy.id.clone().unwrap(), // TODO
+                                monitor_name,
+                                monitor_type,
                                 status: models::MonitorStatusIndicator::DOWN,
+                                status_id,
                                 timestamp,
-                                last_result: models::MonitorStatusResult {
-                                    expected: "Expected to be able to start monitor".to_string(),
-                                    actual: format!("Starting monitor failed: {}", err),
-                                },
+                                expires_at: timestamp + chrono::Duration::days(1), // TODO
+                                expected_result: "Expected to be able to start monitor".to_string(),
+                                actual_result: format!("Starting monitor failed: {}", err),
                                 description: format!("Monitor of type {}", monitor_copy.type_),
-                                log: None
+                                session: None,
+                                log: Vec::new() 
                             }
                         },
                     };
                     (monitor_copy, status)
                 }));
-                report.monitors_started.push(monitor_name.to_owned());
             } else {
                 report.monitors_ignored.push(monitor_name.to_owned());
             }

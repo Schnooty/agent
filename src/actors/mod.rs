@@ -7,6 +7,8 @@ mod scheduler;
 mod session;
 mod uploader;
 mod alerter;
+mod file;
+mod timer;
 
 pub use api::*;
 pub use configurator::*;
@@ -15,3 +17,5 @@ pub use scheduler::*;
 pub use session::*;
 pub use uploader::*;
 pub use alerter::*;
+pub use file::*;
+pub use timer::*;

@@ -1,20 +1,28 @@
-use chrono::Duration;
 use chrono::Utc;
-use crate::api::{Api, ApiFuture};
+use chrono::DateTime;
+use crate::api::{Api, ReadApi, ApiFuture};
 use crate::error::Error;
-use crate::config::Config;
 use openapi_client::models;
-use crate::api::AgentSessionState;
+use hostname::get as get_hostname;
 
-use reqwest::Client;
+use crate::http::{HttpClient, HttpError};
 use std::time::Duration as StdDuration;
+//use http::request::Request;
 
-pub struct HttpApi {
-    config: Config,
-    options: HttpApiOptions,
+#[derive(Clone, Debug)]
+pub struct HttpConfig {
+    pub base_url: String,
+    pub api_key: Option<String>
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
+pub struct HttpApi {
+    config: HttpConfig,
+    options: HttpApiOptions,
+    started_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
 pub struct HttpApiOptions {
     timeout_seconds: u64,
 }
@@ -29,10 +37,11 @@ impl Default for HttpApiOptions {
 
 #[allow(dead_code)]
 impl HttpApi {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &HttpConfig) -> Self {
         Self {
-            config: config.to_owned(),
-            options: Default::default()
+            config: config.clone(),
+            options: Default::default(),
+            started_at: Utc::now()
         }
     }
 
@@ -40,43 +49,54 @@ impl HttpApi {
         self.options = options;
     }
 
-    fn get_basic_auth(&self) -> (String, Option<String>) {
-        let mut iter = self.config.api_key.split(':');
-        let username: String = match iter.next() {
-            Some(ref u) => u.to_string(),
-            None => String::new()
-        };
-        let password: String = match iter.next() {
-            Some(ref p) => p.to_string(),
-            None => String::new()
-        };
-        (username, Some(password))
+    fn get_basic_auth(&self) -> Option<(String, Option<String>)> {
+        match &self.config.api_key {
+            Some(ref api_key) => {
+                let mut iter = api_key.split(':');
+                let username: String = match iter.next() {
+                    Some(ref u) => u.to_string(),
+                    None => String::new()
+                };
+                let password: String = match iter.next() {
+                    Some(ref p) => p.to_string(),
+                    None => String::new()
+                };
+                Some((username, Some(password)))
+            },
+            None => None
+        }
     }
 }
 
-impl Api for HttpApi {
+impl ReadApi for HttpApi {
     fn get_monitors(&self) -> ApiFuture<Vec<models::Monitor>> {
-        let (agent_id, password) = self.get_basic_auth();
+        let basic_auth = self.get_basic_auth();
         debug!("Getting monitors");
 
         let uri = format!("{}monitors", self.config.base_url.to_string());
 
-        let client = Client::new()
-            .get(&uri)
-            .basic_auth(&agent_id, password)
-            .timeout(StdDuration::from_secs(self.options.timeout_seconds));
+        let mut request = reqwest::Client::new()
+            .request(reqwest::Method::GET, uri);
+
+        if let Some((agent_id, Some(password))) = basic_auth {
+            let base64_creds = base64::encode(format!("{}:{}", agent_id, password));
+
+            request = request.header("Authorization", format!("Basic {}", base64_creds));
+        }
 
         Box::pin(async {
+            let client = HttpClient::new(request.body(String::new()).build().unwrap());
+
             let response_result = client.send().await;
 
-            let response_body_result: Result<models::MonitorArray, _> = match response_result {
+            let response_body_result: Result<models::MonitorArray, HttpError> = match response_result {
                 Ok(response) => {
                     if !response.status().is_success() {
                         warn!("Response status was NOT success status code");
                         return Err(Error::new(format!("Agent failed to get monitors. Got status code {}", response.status())));
                     }
 
-                    response.json().await
+                    Ok(serde_json::from_slice(&response.bytes().await?)?)
                 }
                 Err(err) => return Err(Error::new(format!("Agent failed to get monitors: {}", err))),
             };
@@ -86,23 +106,27 @@ impl Api for HttpApi {
                     debug!("Retrieved {} monitors", body.monitors.len());
                     Ok(body.monitors)
                 }
-                Err(err) => Err(Error::from(err)),
+                Err(err) => todo!("Convert the error")//Err(Error::from(err)),
             }
         })
     }
 
     fn get_alerts(&self) -> ApiFuture<Vec<models::Alert>> {
-        let (agent_id, password) = self.get_basic_auth();
+        let basic_auth  = self.get_basic_auth();
         debug!("Getting monitors");
 
         let uri = format!("{}alerts", self.config.base_url.to_string());
 
-        let client = Client::new()
-            .get(&uri)
-            .basic_auth(&agent_id, password)
-            .timeout(StdDuration::from_secs(self.options.timeout_seconds));
+        let mut builder = reqwest::Client::new().request(reqwest::Method::GET, uri);
 
-        Box::pin(async {
+        if let Some((agent_id, Some(password))) = basic_auth {
+            let base64_creds = base64::encode(format!("{}:{}", agent_id, password));
+
+            builder = builder.header("Authorization", format!("Basic {}", base64_creds));
+        }
+
+        Box::pin(async move {
+            let client = HttpClient::new(builder.body(String::new()).build().unwrap());
             let response_result = client.send().await;
 
             let response_body_result: Result<models::AlertArray, _> = match response_result {
@@ -112,7 +136,7 @@ impl Api for HttpApi {
                         return Err(Error::new(format!("Agent failed to get alerts. Got status code {}", response.status())));
                     }
 
-                    response.json().await
+                    serde_json::from_slice(&response.bytes().await?)
                 }
                 Err(err) => return Err(Error::new(format!("Agent failed to get alerts: {}", err)))
             };
@@ -123,37 +147,66 @@ impl Api for HttpApi {
             }
         })
     }
+}
 
-    fn post_heartbeat(&mut self, group_id: &str, session_id: &str) -> ApiFuture<AgentSessionState> {
-        let (agent_id, password) = self.get_basic_auth();
+impl Api for HttpApi {
+    fn post_heartbeat(&mut self, session_name: &str) -> ApiFuture<models::Session> {
+        let basic_auth = self.get_basic_auth();
 
         debug!(
-            "Posting heartbeat for session {} in group {}",
-            session_id, group_id
+            "Posting heartbeat (session_name={})",
+            session_name
         );
 
         let uri = format!(
-            "{}session/{}",
+            "{}sessions/{}",
             self.config.base_url.to_string(),
-            group_id
+            session_name
         );
 
-        debug!("Building heartbeat request (uri={}, agent_id={}, password={:?})", uri, agent_id, password);
+        debug!("Building heartbeat request (uri={})", uri);
 
-        let client = Client::new()
-            .post(&uri)
-            .basic_auth(&agent_id, password)
-            .json(&models::AgentSessionRequest {
-                session_id: session_id.to_owned(),
-                is_new: Some(true),
-            })
-            .timeout(StdDuration::from_secs(self.options.timeout_seconds));
+        let mut builder = reqwest::Client::new()
+            .request(reqwest::Method::PUT, uri)
+            .header("Content-Type", "application/json");
 
-        let agent_session_id = session_id.to_owned();
+        if let Some((agent_id, Some(password))) = basic_auth {
+            let base64_creds = base64::encode(format!("{}:{}", agent_id, password));
+
+            builder = builder.header("Authorization", format!("Basic {}", base64_creds));
+        }
+
+        let hostname = match get_hostname() {
+            Ok(h) => h.to_string_lossy().into_owned(),
+            Err(e) => format!("Error getting hostname: {}", e)
+        };
+
+        let platform = models::PlatformInfo {
+            os: Some(std::env::consts::OS.to_string()),
+            cpu: None 
+        };
+
+        let body = serde_json::to_string(&models::Session {
+            name: session_name.to_owned(),
+            hostname: Some(hostname),
+            platform: Some(platform),
+            last_updated: Utc::now(),
+            started_at: self.started_at
+        }).unwrap(); // TODO
+
+        //client = client.json()
+        //    .timeout(StdDuration::from_secs(self.options.timeout_seconds));
+
+        let client = HttpClient::new(builder.body(body).build().unwrap()); // TODO
+
+        let _agent_session_id = session_name.to_owned();
 
         Box::pin(async move {
             debug!("Sending heartbeat");
+
             let result = client.send().await;
+
+            debug!("Heartbeat send complete");
 
             let response = match result {
                 Ok(r) => r,
@@ -173,60 +226,55 @@ impl Api for HttpApi {
 
             debug!("Loading JSON data");
 
-            let response_json: Result<models::AgentSessionState, _> = response.json().await;
+            let response_json: serde_json::Result<models::SessionContainer> = serde_json::from_slice(&response.bytes().await?);
 
             match response_json {
-                Ok(r) => {
-                    if let Some(agents) = r.agents {
-                        if let Some(this_agent) = agents
-                            .into_iter().find(|a| a.session_id == agent_session_id)
-                        {
-                            Ok(AgentSessionState {
-                                agent_session_id,
-                                monitors: this_agent
-                                    .monitor_ids
-                                    .into_iter()
-                                    .map(|s| s.to_string())
-                                    .collect(),
-                                heartbeat_due_by: Utc::now() + Duration::minutes(2),
-                            })
-                        } else {
-                            Err(Error::new("Could not find this agent in the list from API"))
-                        }
-                    } else {
-                        Err(Error::new("Could not find this agent in the list from API"))
-                    }
-                }
+                Ok(s) => Ok(s.session),
                 Err(e) => Err(Error::new(format!("Agent failed to load the agent list from API: {}", e)))
             }
         })
     }
 
     fn post_statuses(&mut self, statuses: &[models::MonitorStatus]) -> ApiFuture<()> {
-        let (agent_id, password) = self.get_basic_auth();
+        let basic_auth = self.get_basic_auth();
         let statuses: Vec<_> = statuses.to_vec();
+        let base_url = self.config.base_url.to_string();
 
         debug!("Uploading {} monitor status(es)", statuses.len());
 
-        let uri = format!("{}statuses", self.config.base_url.to_string());
-
-        let body = models::MonitorStatusArray {
-            statuses
-        };
-
-        let client = Client::new()
-            .post(&uri)
-            .basic_auth(&agent_id, password)
-            .json(&body)
-            .timeout(StdDuration::from_secs(self.options.timeout_seconds));
 
         Box::pin(async move {
-            let result = match client.send().await {
-                Ok(r) => r,
-                Err(err) => {
-                    error!("Failed to upload results: {}", err);
-                    return Err(Error::new(format!("Failed to upload results: {}", err)));
+            for status in statuses.iter() {
+                let uri = format!("{}statuses/{}", 
+                    base_url,
+                    status.status_id
+                );
+
+                let mut builder = reqwest::Client::new().request(reqwest::Method::POST, uri);
+
+                if let Some((ref agent_id, Some(ref password))) = basic_auth {
+                    let base64_creds = base64::encode(format!("{}:{}", agent_id, password));
+
+                    builder= builder.header("Authorization", format!("Basic {}", base64_creds));
+                    //client = client.basic_auth(&agent_id, password);
                 }
+
+                let request = builder.body(serde_json::to_string(&status).unwrap()); // TODO
+                let client = HttpClient::new(request.build().unwrap());
+
+                match client.send().await {
+                    Ok(r) => r,
+                    Err(err) => {
+                        error!("Failed to upload results: {}", err);
+                        return Err(Error::new(format!("Failed to upload results: {}", err)));
+                    }
+                };
+            }
+
+            Ok(())
+
+            /*let body = models::MonitorStatusArray {
+                statuses
             };
 
             let status = result.status();
@@ -235,8 +283,8 @@ impl Api for HttpApi {
                 error!("Error uploading statuses. Got status code: {}", status);
 
                 let status_error = Error::new(format!("Failed to upload results. Got status code: {}", status));
-
-                let errors: Vec<models::ResponseError> = match result.json().await {
+                let bytes = result.bytes().await?;
+                let errors: Vec<models::ResponseError> = match serde_json::from_slice(&bytes) {
                     Ok(e) => e,
                     Err(err) => {
                         error!("Failed to parse error response: {}", err);
@@ -253,8 +301,7 @@ impl Api for HttpApi {
 
             // TODO use the result
 
-            Ok(())
-
+            Ok(())*/
         })
     }
 }

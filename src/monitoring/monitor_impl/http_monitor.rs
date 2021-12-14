@@ -5,10 +5,10 @@ use crate::monitoring::MonitorStatusBuilder;
 use crate::monitoring::MonitorFuture;
 use chrono::prelude::*;
 use openapi_client::models;
-use reqwest::redirect::Policy;
-use reqwest::Client;
-use reqwest::Method;
 use std::fmt::Write;
+//use http::request::Request;
+//use http::method::Method;
+use crate::http::HttpClient;
 
 pub struct HttpMonitor;
 
@@ -22,7 +22,7 @@ impl MonitorSource for HttpMonitor {
         let monitor = monitor.clone();
 
         Box::pin(async {
-            let monitor_id = match monitor.id {
+            /*let monitor_id = match monitor.id {
                 Some(m) => m.to_string(),
                 None => {
                     return {
@@ -31,31 +31,37 @@ impl MonitorSource for HttpMonitor {
                         Err(Error::new("Could not find the ID for this monitor. This is an internal error."))
                     }
                 }
-            };
+            };*/
 
-            let status_builder = MonitorStatusBuilder::new(&monitor_id, Utc::now());
+            let mut status_builder = MonitorStatusBuilder::new(&monitor.name, models::MonitorType::HTTP, Utc::now());
 
             const EXPECTED: &str = "200-level status code";
 
-            let (builder, mut status_builder, url) = if let (Some(Ok(ref method)), Some(url)) = (
+            let (request, mut status_builder) = if let (Some(Ok(ref method)), Some(url)) = (
                 monitor
                     .body
                     .method
                     .clone()
-                    .map(|m| m.parse() as Result<Method, _>),
+                    .map(|m| m.parse() as Result<reqwest::Method, _>),
                 &monitor.body.url,
             ) {
-                let mut builder = match Client::builder().redirect(Policy::none()).build() {
-                    Ok(b) => b.request(method.clone(), url),
-                    Err(err) => return Err(Error::new(err)),
-                };
+                let mut builder = reqwest::Client::new()
+                    .request(method.clone(), url);
+
                 for header in monitor.body.headers.unwrap_or_default().iter() {
                     builder = builder.header(&header.name, &header.value);
                 }
+
+                writeln!(status_builder, "Beginning GET request to {}", url.trim());
+
+                let body = match monitor.body.body {
+                    Some(ref b) => b.clone(),
+                    None => String::new()
+                };
+
                 (
-                    builder,
+                    builder.body(body).build().unwrap(),
                     status_builder.description(format!("GET {} has success status code", url)),
-                    url
                 )
             } else {
                 let mut result_builder =
@@ -78,15 +84,15 @@ impl MonitorSource for HttpMonitor {
                 ));
             };
 
-            writeln!(status_builder, "Beginning GET request to {}", url.trim());
+            let client = HttpClient::new(request);
 
-            let response_result = builder.send().await;
+            let response_result = client.send().await;
 
             let response = match response_result {
                 Ok(response) => response,
                 Err(err) => {
                     writeln!(status_builder, "Error completing HTTP request: {}", err);
-                    return Err(Error::from(err));
+                    return Err(err.into());
                 }
             };
 

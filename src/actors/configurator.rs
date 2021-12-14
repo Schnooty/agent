@@ -1,23 +1,20 @@
-use crate::actors::ApiActor;
 use crate::actors::*;
 use crate::error::Error;
-use crate::api::HttpApi;
-use actix::ResponseActFuture;
-use chrono::prelude::*;
-use openapi_client::models;
+use crate::config::Config;
 
 pub struct ConfiguratorActor {
-    api_addr: Addr<ApiActor<HttpApi>>,
-    scheduler_addr: Addr<SchedulerActor>,
-    alert_recipients: Vec<Recipient<AlertUpdate>>
+    monitor_recipients: Vec<Recipient<MonitorUpdate>>,
+    alert_recipients: Vec<Recipient<AlertUpdate>>,
 }
 
 impl ConfiguratorActor {
-    pub fn new(api_addr: Addr<ApiActor<HttpApi>>, scheduler_addr: Addr<SchedulerActor>, alert_recipients: Vec<Recipient<AlertUpdate>>) -> Self {
+    pub fn new(
+        monitor_recipients: Vec<Recipient<MonitorUpdate>>,
+        alert_recipients: Vec<Recipient<AlertUpdate>>,
+    ) -> Self {
         Self {
-            api_addr,
-            scheduler_addr,
-            alert_recipients
+            monitor_recipients,
+            alert_recipients,
         }
     }
 }
@@ -32,64 +29,45 @@ impl Actor for ConfiguratorActor {
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<(), Error>")]
-pub struct SessionState {
-    pub timestamp: DateTime<Utc>,
-    pub agent_session_id: String,
-    pub monitors: Vec<String>,
-    pub heartbeat_due_by: DateTime<Utc>,
+pub struct CurrentConfig {
+    pub config: Config
 }
 
-impl Handler<SessionState> for ConfiguratorActor {
-    type Result = ResponseActFuture<Self, Result<(), Error>>;
+impl Handler<CurrentConfig> for ConfiguratorActor {
+    type Result = Result<(), Error>;
 
-    fn handle(&mut self, msg: SessionState, _ctx: &mut Context<Self>) -> Self::Result {
-        debug!("Handling session state");
-        let api_addr = self.api_addr.clone();
-        let scheduler_addr = self.scheduler_addr.clone();
-        let alert_recipients = self.alert_recipients.clone();
+    fn handle(&mut self, config_msg: CurrentConfig, _ctx: &mut Context<Self>) -> Self::Result {
+        debug!("Handling latest config");
 
-        Box::pin(actix::fut::wrap_future(async move {
-            let monitors = match api_addr.send(GetMonitors).await {
-                Ok(Ok(m)) => m,
-                Ok(Err(err)) => return Err(err),
-                Err(err) => return Err(Error::from(err)),
-            };
+        // create a unique identifier for these fixed monitors
+        let monitors_uid = format!("config://monitors"); // yes it is a URI
+        let alerts_uid = format!("config://alerts"); // yes it is a URI
 
-            let alerts = match api_addr.send(GetAlerts).await {
-                Ok(Ok(m)) => m,
-                Ok(Err(err)) => return Err(err),
-                Err(err) => return Err(Error::from(err)),
-            };
-
-            for alert_recipient in alert_recipients {
-                match alert_recipient.do_send(AlertUpdate { alerts: alerts.clone() }) {
-                    Err(err) => error!("Error sending alert update from configurator (error_msg={})", err),
-                    Ok(_) => ()
+        for monitor_recipient in &self.monitor_recipients {
+            for monitor in config_msg.config.monitors.iter() {
+                // build the monitor config message
+                let monitor_update = MonitorUpdate {
+                    source_id: monitors_uid.clone(),
+                    monitor: monitor.clone() 
+                };
+                if let Err(_) = monitor_recipient.do_send(monitor_update.clone()) {
+                    error!("There was an error delivering monitors");
                 }
             }
+        }
 
-            // now filter out the monitors that we will use
+        let alert_update = AlertUpdate {
+            uid: alerts_uid,
+            alerts: config_msg.config.alerts
+        };
 
-            let our_monitors: Vec<models::Monitor> = monitors
-                .into_iter()
-                .filter(|m| {
-                    if let Some(monitor_id) = &m.id {
-                        msg.monitors.contains(&monitor_id)
-                    } else {
-                        false
-                    }
-                })
-                .collect();
-
-            match scheduler_addr
-                .send(MonitorUpdate {
-                    monitors: our_monitors,
-                })
-                .await
-            {
-                Ok(_) => Ok(()),
-                Err(err) => Err(Error::from(err)),
+        for alert_recipient in &self.alert_recipients {
+            if let Err(_) = alert_recipient.do_send(alert_update.clone()) {
+                error!("There was an error delivering alerts");
             }
-        }))
+        }
+
+       
+        Ok(())
     }
 }

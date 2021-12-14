@@ -22,6 +22,7 @@ pub struct MonitorFutureMaker {
     http: HttpMonitor,
     process: ProcessMonitor,
     tcp: TcpMonitor,
+    redis: RedisMonitor,
 }
 
 impl MonitorFutureMaker {
@@ -29,7 +30,8 @@ impl MonitorFutureMaker {
         Self {
             http: HttpMonitor { },
             process: ProcessMonitor { },
-            tcp: TcpMonitor { }
+            tcp: TcpMonitor { },
+            redis: RedisMonitor { }
         }
     }
 }
@@ -40,21 +42,24 @@ impl Monitoring for MonitorFutureMaker {
             models::MonitorType::HTTP => self.http.monitor(monitor),
             models::MonitorType::PROCESS=> self.process.monitor(monitor),
             models::MonitorType::TCP => self.tcp.monitor(monitor),
+            models::MonitorType::REDIS => self.redis.monitor(monitor),
         }
     }
 }
 
 pub struct MonitorStatusBuilder {
-    monitor_id: String,
+    monitor_name: String,
+    monitor_type: models::MonitorType,
     timestamp: DateTime<Utc>,
     description: String,
     log: Vec<models::MonitorStatusLogEntry>,
 }
 
 impl MonitorStatusBuilder {
-    pub fn new<S: ToString>(monitor_id: S, timestamp: DateTime<Utc>) -> Self {
+    pub fn new<S: ToString>(monitor_name: S, monitor_type: models::MonitorType, timestamp: DateTime<Utc>) -> Self {
         Self {
-            monitor_id: monitor_id.to_string(),
+            monitor_name: monitor_name.to_string(),
+            monitor_type,
             timestamp,
             description: "Description unavailable".to_owned(),
             log: Vec::new()
@@ -72,15 +77,17 @@ impl MonitorStatusBuilder {
         debug!("Actual result: {}", actual.to_string());
 
         models::MonitorStatus {
-            monitor_id: self.monitor_id,
+            monitor_name: self.monitor_name.to_owned(),
+            status_id: self.monitor_name, // TODO
             status: models::MonitorStatusIndicator::OK,
+            monitor_type: self.monitor_type,
             timestamp: self.timestamp ,
-            last_result: models::MonitorStatusResult {
-                expected: expected.to_string(),
-                actual: actual.to_string(),
-            },
+            expires_at: self.timestamp + chrono::Duration::days(1),
+            expected_result: expected.to_string(),
+            actual_result: actual.to_string(),
             description: self.description,
-            log: Some(self.log),
+            session: None,
+            log: self.log,
         }
     }
 
@@ -90,21 +97,24 @@ impl MonitorStatusBuilder {
         debug!("Actual result: {}", actual.to_string());
 
         models::MonitorStatus {
-            monitor_id: self.monitor_id,
+            monitor_name: self.monitor_name.to_owned(),
+            status_id: self.monitor_name, // TODO
+            monitor_type: self.monitor_type,
             status: models::MonitorStatusIndicator::DOWN,
             timestamp: self.timestamp,
-            last_result: models::MonitorStatusResult {
-                expected: expected.to_string(),
-                actual: actual.to_string(),
-            },
+            expires_at: self.timestamp + chrono::Duration::days(1),
+            expected_result: expected.to_string(),
+            actual_result: actual.to_string(),
             description: self.description,
-            log: Some(self.log),
+            log: self.log,
+            session: None // TODO
         }
     }
 }
 
 impl fmt::Write for MonitorStatusBuilder {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        trace!("Writing log item: {}", s);
         for value in s.split(|c| c == '\n') {
             self.log.push(models::MonitorStatusLogEntry {
                 timestamp: Utc::now(),

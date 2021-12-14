@@ -1,20 +1,19 @@
 use actix::prelude::*;
 use crate::actors::*;
-use crate::api::HttpApi;
 use crate::error::Error;
 use openapi_client::models;
 use std::time;
 use std::collections::HashSet;
 
 pub struct UploaderActor {
-    api_addr: Addr<ApiActor<HttpApi>>,
+    api_addr: Addr<ApiActor>,
     buffer: Vec<models::MonitorStatus>,
     last_upload_started: Option<time::Instant>,
     interval: Option<SpawnHandle>,
 }
 
 impl UploaderActor {
-    pub fn new(api_addr: Addr<ApiActor<HttpApi>>) -> Self {
+    pub fn new(api_addr: Addr<ApiActor>) -> Self {
         Self {
             api_addr,
             buffer: vec![],
@@ -59,10 +58,10 @@ impl UploaderActor {
         // filter out the most recent results
         let statuses: Vec<_> = buffer.into_iter()
             .filter(|status| {
-                if already_seen.contains(&status.monitor_id) {
+                if already_seen.contains(&status.monitor_name) {
                     false
                 } else {
-                    already_seen.insert(status.monitor_id.clone());
+                    already_seen.insert(status.monitor_name.clone());
                     true
                 }
             })
@@ -72,24 +71,23 @@ impl UploaderActor {
 
         // send message to API actor
         debug!("Uploading statuses (statuses_len={})", statuses.len());
-        let request = self.api_addr.send(PostStatuses { statuses: statuses.clone() });
+        self.api_addr.do_send(StatusUpdatesRequest { 
+            recipient: vec![],
+            statuses: statuses.clone() 
+        });
 
-        ctx.spawn(
-            actix::fut::wrap_future::<_, Self>(request).map(move |result, this, _| {
-                match result {
-                    Ok(_) => {
-                        debug!("Upload was successful");
-                    },
-                    Err(err) => {
-                        error!("Error while uploading: {}", err);
-                        debug!("Putting these statuses back on the buffer");
-                        for status in statuses.into_iter() {
-                            this.buffer.insert(0, status);
-                        }
-                    }
+        /*match request {
+            Ok(_) => {
+                debug!("Upload was successful");
+            },
+            Err(err) => {
+                error!("Error while uploading: {}", err);
+                debug!("Putting these statuses back on the buffer");
+                for status in statuses.into_iter() {
+                    this.buffer.insert(0, status);
                 }
-            })
-        );
+            }
+        }*/
     }
 }
 
@@ -101,7 +99,7 @@ impl Handler<StatusMsg> for UploaderActor {
     type Result = Result<(), Error>;
 
     fn handle(&mut self, msg: StatusMsg, ctx: &mut Self::Context) -> Self::Result {
-        debug!("Status received (monitor_id={})", msg.status.monitor_id);
+        debug!("Status received (monitor_name={})", msg.status.monitor_name);
         self.buffer.push(msg.status);
         debug!("Message added to buffer (buffer_len={})", self.buffer.len());
         self.ensure_upload(ctx);

@@ -30,7 +30,7 @@ impl MonitorSource for TcpMonitor {
                     }
                 }
             };
-            let mut result_builder = MonitorStatusBuilder::new(&monitor_id, Utc::now());
+            let mut result_builder = MonitorStatusBuilder::new(&monitor_id, models::MonitorType::TCP, Utc::now());
 
             writeln!(result_builder, "Checking monitor configuration");
 
