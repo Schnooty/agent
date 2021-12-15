@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 extern crate chrono;
 extern crate clap;
 extern crate env_logger;
@@ -137,7 +137,8 @@ async fn main() {
     let executor_actor = actors::ExecutorActor::new(monitoring, status_recipients);
     let executor_addr = executor_actor.start();
 
-    let scheduler_actor = actors::SchedulerActor::new(vec![executor_addr.recipient()], timer_addr);
+    let scheduler_actor =
+        actors::SchedulerActor::new(vec![executor_addr.recipient()], timer_addr.clone());
     let scheduler_addr = scheduler_actor.start();
 
     // all the configurators
@@ -147,7 +148,7 @@ async fn main() {
         vec![alerter_addr.recipient()],
     );
 
-    let session_actor = actors::SessionActor::new(vec![]);
+    let session_actor = actors::SessionActor::new(&config, timer_addr.recipient(), vec![]);
     let session_actor_addr = session_actor.start();
     let configurator_addr = configurator.start();
 
@@ -193,6 +194,6 @@ async fn main() {
 
     debug!("Done in the main thread");
     loop {
-        async_std::task::sleep(Duration::new(u64::MAX >> 32, 0)).await;
+        async_std::task::sleep(Duration::new(60 * 60 * 24, 0)).await; // sleep for a day idk
     }
 }

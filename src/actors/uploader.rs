@@ -1,6 +1,5 @@
 use crate::actors::*;
 use crate::error::Error;
-use actix::prelude::*;
 use openapi_client::models;
 use std::collections::HashSet;
 use std::time;
@@ -43,7 +42,7 @@ impl UploaderActor {
         }
     }
 
-    fn perform_upload(&mut self, ctx: &mut <Self as Actor>::Context) {
+    fn perform_upload(&mut self, _ctx: &mut <Self as Actor>::Context) {
         // if empty, STOP
         if self.buffer.is_empty() {
             return;

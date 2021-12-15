@@ -1,13 +1,10 @@
 use crate::api::{Api, ApiFuture, ReadApi};
 use crate::error::Error;
+use crate::http::HttpClient;
 use chrono::DateTime;
 use chrono::Utc;
 use hostname::get as get_hostname;
 use openapi_client::models;
-
-use crate::http::{HttpClient, HttpError};
-use std::time::Duration as StdDuration;
-//use http::request::Request;
 
 #[derive(Clone, Debug)]
 pub struct HttpConfig {
@@ -88,31 +85,31 @@ impl ReadApi for HttpApi {
 
             let response_result = client.send().await;
 
-            let response_body_result: Result<models::MonitorArray, HttpError> =
-                match response_result {
-                    Ok(response) => {
-                        if !response.status().is_success() {
-                            warn!("Response status was NOT success status code");
-                            return Err(Error::new(format!(
-                                "Agent failed to get monitors. Got status code {}",
-                                response.status()
-                            )));
-                        }
-
-                        Ok(serde_json::from_slice(&response.bytes().await?)?)
+            //let response_body_result: Result<models::MonitorArray, HttpError> =
+            match response_result {
+                Ok(response) => {
+                    if !response.status().is_success() {
+                        warn!("Response status was NOT success status code");
+                        return Err(Error::new(format!(
+                            "Agent failed to get monitors. Got status code {}",
+                            response.status()
+                        )));
                     }
-                    Err(err) => {
-                        return Err(Error::new(format!("Agent failed to get monitors: {}", err)))
-                    }
-                };
 
-            match response_body_result {
+                    Ok(serde_json::from_slice(&response.bytes().await?)?)
+                }
+                Err(err) => {
+                    return Err(Error::new(format!("Agent failed to get monitors: {}", err)))
+                }
+            }
+
+            /*match response_body_result {
                 Ok(body) => {
                     debug!("Retrieved {} monitors", body.monitors.len());
                     Ok(body.monitors)
                 }
-                Err(err) => todo!("Convert the error"), //Err(Error::from(err)),
-            }
+                Err(err) => Err(Error::from(err)),
+            }*/
         })
     }
 

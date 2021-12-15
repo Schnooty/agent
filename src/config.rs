@@ -12,8 +12,12 @@ pub struct Config {
     pub monitors: Vec<models::Monitor>,
     #[serde(default)]
     pub alerts: Vec<models::Alert>,
-    pub status: StatusSink,
-    pub session: SessionInfo,
+    #[serde(default)]
+    pub session_name: Option<String>,
+    #[serde(default)]
+    pub create_session: bool,
+    #[serde(default)]
+    pub upload_statuses: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -36,13 +40,6 @@ pub enum AlertSource {
         base_url: Option<String>,
         api_key: Option<String>,
     },
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct StatusSink {
-    pub base_url: Option<String>,
-    pub api_key: Option<String>,
-    pub enabled: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

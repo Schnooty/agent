@@ -1,7 +1,6 @@
 use crate::actors::*;
 use crate::alerts::*;
 use crate::error::Error;
-use actix::prelude::*;
 use chrono::offset::Utc;
 use chrono::DateTime;
 use hostname::get as get_hostname;

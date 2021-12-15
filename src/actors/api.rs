@@ -1,8 +1,6 @@
 use crate::api::*;
 use crate::error::Error;
-use actix::prelude::ResponseFuture;
 use actix::prelude::*;
-use async_trait::async_trait;
 use futures::FutureExt;
 use openapi_client::models;
 
@@ -21,13 +19,6 @@ impl ApiActor {
 impl Actor for ApiActor {
     type Context = Context<Self>;
 }
-
-//#[derive(Message)]
-//#[rtype(result = "Result<RequestHandle, Error>")]
-//pub struct ApiReqMsg<T, E: actix::Message + Send> where <E as actix::Message>::Result: Result<RequestHandle, Error> { // std::marker::Send {
-//    pub request: T,
-//    pub recipient: Recipient<E>,
-//}
 
 #[derive(Message)]
 #[rtype(result = "Result<RequestHandle, Error>")]
@@ -121,9 +112,10 @@ pub struct HeartbeatResponse {
 impl Handler<HeartbeatRequest> for ApiActor {
     type Result = Result<RequestHandle, Error>;
 
-    fn handle(&mut self, msg: HeartbeatRequest, _ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: HeartbeatRequest, ctx: &mut Self::Context) -> Self::Result {
         let addr = msg.recipient.clone();
-        self.api
+        let future = self
+            .api
             .post_heartbeat(&msg.session_id)
             .map(move |s| match s {
                 Ok(session) => {
@@ -135,6 +127,7 @@ impl Handler<HeartbeatRequest> for ApiActor {
                     error!("Error returning session: {}", err);
                 }
             });
+        ctx.spawn(future.into_actor(self));
         Ok(RequestHandle::new())
     }
 }
@@ -155,7 +148,6 @@ impl Handler<StatusUpdatesRequest> for ApiActor {
 
     fn handle(&mut self, msg: StatusUpdatesRequest, ctx: &mut Self::Context) -> Self::Result {
         let handle = RequestHandle::new();
-        //let addr = msg.recipient.clone();
         let future = self.api.post_statuses(&msg.statuses).map(move |m| {
             match m {
                 Ok(_) => {

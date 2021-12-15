@@ -6,12 +6,6 @@ pub struct MemoryApi {
     alerts: Vec<models::Alert>,
 }
 
-impl MemoryApi {
-    pub fn new(monitors: Vec<models::Monitor>, alerts: Vec<models::Alert>) -> Self {
-        Self { monitors, alerts }
-    }
-}
-
 impl ReadApi for MemoryApi {
     fn get_monitors(&self) -> ApiFuture<Vec<models::Monitor>> {
         let monitors = self.monitors.clone();

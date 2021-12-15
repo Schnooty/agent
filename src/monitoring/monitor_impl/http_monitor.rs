@@ -1,14 +1,11 @@
+use crate::http::HttpClient;
 #[allow(unused_must_use)]
-use crate::error::Error;
 use crate::monitoring::MonitorFuture;
 use crate::monitoring::MonitorSource;
 use crate::monitoring::MonitorStatusBuilder;
 use chrono::prelude::*;
 use openapi_client::models;
 use std::fmt::Write;
-//use http::request::Request;
-//use http::method::Method;
-use crate::http::HttpClient;
 
 pub struct HttpMonitor;
 

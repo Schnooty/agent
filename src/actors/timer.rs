@@ -24,6 +24,7 @@ impl Actor for TimerActor {
 }
 
 struct Receiver {
+    #[allow(dead_code)]
     spec: TimerSpec,
     interval: SpawnHandle,
 }
@@ -47,15 +48,20 @@ impl Handler<TimerSpec> for TimerActor {
 
     fn handle(&mut self, msg: TimerSpec, ctx: &mut Context<Self>) -> Self::Result {
         // if not already scheduled
+        debug!("Setting up timer for {}", msg.uid);
         match self.schedule.remove(&msg.uid) {
             None => {
-                if msg
+                if !msg
                     .recipient
                     .do_send(Timeout {
                         uid: msg.uid.clone(),
                     })
                     .is_ok()
                 {
+                    error!(
+                        "Failed to send timeout message while removing spec for {}",
+                        msg.uid
+                    );
                     return Err(Error::new(format!(
                         "Failed to set timer spec for {}",
                         msg.uid
@@ -63,6 +69,7 @@ impl Handler<TimerSpec> for TimerActor {
                 }
             }
             Some(s) => {
+                debug!("Cancelling existing timer");
                 ctx.cancel_future(s.interval);
             }
         }
@@ -85,6 +92,8 @@ impl Handler<TimerSpec> for TimerActor {
                 interval,
             },
         );
+
+        debug!("Successfully set up timer");
 
         Ok(())
     }

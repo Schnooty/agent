@@ -14,7 +14,7 @@ pub struct SchedulerActor {
 }
 
 struct MonitorContainer {
-    uid: String,
+    //uid: String,
     monitor: models::Monitor,
 }
 
@@ -55,7 +55,7 @@ impl Handler<MonitorUpdate> for SchedulerActor {
         self.monitors.insert(
             uid.clone(),
             MonitorContainer {
-                uid: uid.clone(),
+                //uid: uid.clone(),
                 monitor: msg.monitor.clone(),
             },
         );
