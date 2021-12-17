@@ -5,12 +5,11 @@ authors = ["Mate Antunovic <mate@schnooty.com>"]
 edition = "2018"
 
 [dependencies]
-openapi_client = { path = "../api/rust" }
 clap = "3.0.0-beta.2"
 futures = "0.3.5"
-serde = { version = "^1.0.119", features = ["derive"] }
+serde = { version = "^1.0.132", features = ["derive"] }
 serde_json = "^1.0.41"
-chrono = "0.4"
+chrono = { version = "0.4.6", features = ["serde"] }
 log = "0.4.6"
 sysinfo = "0.16.3"
 hyper-tls = "0.3.2"
@@ -33,3 +32,4 @@ async-native-tls = "0.4.0"
 base64 = "0.13.0"
 reqwest = "0.11.7"
 async-trait = "0.1.51"
+hyper = "0.13.7"
