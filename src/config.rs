@@ -1,4 +1,4 @@
-use openapi_client::models;
+use crate::openapi_client::models;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

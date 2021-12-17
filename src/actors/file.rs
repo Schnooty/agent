@@ -1,8 +1,8 @@
 #![allow(warnings)]
 use crate::actors::*;
 use crate::error::Error;
+use crate::openapi_client::models;
 use actix::prelude::*;
-use openapi_client::models;
 use serde_json;
 use std::fs::File;
 use std::io::prelude::*;

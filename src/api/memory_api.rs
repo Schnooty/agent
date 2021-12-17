@@ -1,5 +1,5 @@
 use crate::api::{ApiFuture, ReadApi};
-use openapi_client::models;
+use crate::openapi_client::models;
 
 pub struct MemoryApi {
     monitors: Vec<models::Monitor>,

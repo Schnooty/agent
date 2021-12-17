@@ -1,6 +1,6 @@
 use crate::actors::*;
 use crate::error::Error;
-use openapi_client::models;
+use crate::openapi_client::models;
 use std::collections::HashSet;
 use std::time;
 

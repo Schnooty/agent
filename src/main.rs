@@ -3,7 +3,7 @@ extern crate chrono;
 extern crate clap;
 extern crate env_logger;
 extern crate futures;
-extern crate openapi_client;
+//extern crate openapi_client;
 extern crate serde_json;
 extern crate sysinfo;
 extern crate toml;
@@ -26,6 +26,7 @@ extern crate test_logger;
 extern crate async_native_tls;
 extern crate async_trait;
 extern crate base64;
+extern crate hyper;
 extern crate reqwest;
 
 mod actors;
@@ -35,6 +36,7 @@ mod config;
 mod error;
 mod http;
 mod monitoring;
+mod openapi_client;
 
 use crate::actix::Actor;
 use crate::actors::*;

@@ -3,8 +3,8 @@ use crate::http::HttpClient;
 use crate::monitoring::MonitorFuture;
 use crate::monitoring::MonitorSource;
 use crate::monitoring::MonitorStatusBuilder;
+use crate::openapi_client::models;
 use chrono::prelude::*;
-use openapi_client::models;
 use std::fmt::Write;
 
 pub struct HttpMonitor;

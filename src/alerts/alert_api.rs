@@ -2,6 +2,7 @@
 
 use crate::api::ApiFuture;
 use crate::error::Error;
+use crate::openapi_client::models;
 use chrono::offset::Utc;
 use chrono::prelude::*;
 use lettre::smtp::authentication::Credentials;
@@ -10,7 +11,6 @@ use lettre::{ClientSecurity, ClientTlsParameters, Envelope, SendableEmail, SmtpC
 use lettre_email::EmailBuilder;
 use log::{debug, error, info};
 use native_tls::TlsConnector;
-use openapi_client::models;
 
 pub trait AlertApi {
     fn send_msteams_msg(

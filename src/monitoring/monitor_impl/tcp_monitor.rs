@@ -3,9 +3,9 @@ use crate::error::Error;
 use crate::monitoring::MonitorFuture;
 use crate::monitoring::MonitorSource;
 use crate::monitoring::MonitorStatusBuilder;
+use crate::openapi_client::models;
 use async_std::net::TcpStream;
 use chrono::prelude::*;
-use openapi_client::models;
 use std::fmt::Write;
 
 pub struct TcpMonitor;

@@ -1,9 +1,9 @@
 use crate::error::Error;
 use crate::monitoring::Monitoring;
+use crate::openapi_client::models;
 use actix::prelude::*;
 use chrono::prelude::*;
 use futures::stream::FuturesUnordered;
-use openapi_client::models;
 use std::collections::HashSet;
 
 pub struct ExecutorActor<M> {

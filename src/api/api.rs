@@ -1,5 +1,5 @@
 use crate::error::Error;
-use openapi_client::models;
+use crate::openapi_client::models;
 use std::future::Future;
 use std::pin::Pin;
 

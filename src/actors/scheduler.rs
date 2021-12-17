@@ -1,9 +1,9 @@
 use crate::actors::TimerActor;
 use crate::actors::*;
 use crate::error::Error;
+use crate::openapi_client::models;
 use actix::clock::Instant;
 use log::*;
-use openapi_client::models;
 use std::collections::HashMap;
 use std::time;
 

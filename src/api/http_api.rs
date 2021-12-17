@@ -1,10 +1,10 @@
 use crate::api::{Api, ApiFuture, ReadApi};
 use crate::error::Error;
 use crate::http::HttpClient;
+use crate::openapi_client::models;
 use chrono::DateTime;
 use chrono::Utc;
 use hostname::get as get_hostname;
-use openapi_client::models;
 
 #[derive(Clone, Debug)]
 pub struct HttpConfig {

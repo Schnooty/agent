@@ -1,10 +1,10 @@
 use crate::actors::*;
 use crate::alerts::*;
 use crate::error::Error;
+use crate::openapi_client::models;
 use chrono::offset::Utc;
 use chrono::DateTime;
 use hostname::get as get_hostname;
-use openapi_client::models;
 use std::collections::HashMap;
 use std::env;
 use sysinfo::SystemExt;

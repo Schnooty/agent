@@ -1,8 +1,8 @@
 use crate::api::*;
 use crate::error::Error;
+use crate::openapi_client::models;
 use actix::prelude::*;
 use futures::FutureExt;
-use openapi_client::models;
 
 use std::marker::Unpin;
 

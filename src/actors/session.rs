@@ -3,8 +3,8 @@ use crate::api::Api;
 use crate::api::{HttpApi, HttpConfig};
 use crate::config::Config;
 use crate::error::Error;
+use crate::openapi_client::models;
 use actix::Context;
-use openapi_client::models;
 use std::time::Duration;
 
 const HEARTBEAT_DURATION_SEC: u64 = 30;

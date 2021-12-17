@@ -4,10 +4,10 @@ pub use monitor_impl::*;
 
 use crate::error::Error;
 use crate::monitoring::{HttpMonitor, MonitorSource, ProcessMonitor};
+use crate::openapi_client::models;
 use chrono::offset::Utc;
 use chrono::DateTime;
 use log::*;
-use openapi_client::models;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
