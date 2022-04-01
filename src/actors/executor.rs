@@ -1,10 +1,10 @@
 use crate::error::Error;
 use crate::monitoring::Monitoring;
-use crate::openapi_client::models;
 use actix::prelude::*;
 use chrono::prelude::*;
 use futures::stream::FuturesUnordered;
 use std::collections::HashSet;
+use crate::config::Monitor;
 
 pub struct ExecutorActor<M> {
     monitoring: M,
@@ -39,7 +39,7 @@ impl ExecReport {
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<ExecReport, Error>")]
 pub struct ExecuteBatch {
-    pub monitors: Vec<models::Monitor>,
+    pub monitors: Vec<Monitor>,
 }
 
 impl<M: Send + Unpin + 'static> Actor for ExecutorActor<M> {
@@ -54,12 +54,12 @@ impl<M: Send + Unpin + 'static> Actor for ExecutorActor<M> {
     }
 }
 
-impl<M: Send + Unpin + 'static> StreamHandler<(models::Monitor, models::MonitorStatus)>
+impl<M: Send + Unpin + 'static> StreamHandler<(Monitor, MonitorStatus)>
     for ExecutorActor<M>
 {
     fn handle(
         &mut self,
-        (monitor, status): (models::Monitor, models::MonitorStatus),
+        (monitor, status): (Monitor, MonitorStatus),
         ctx: &mut Self::Context,
     ) {
         debug!(
@@ -112,10 +112,10 @@ impl<M: Monitoring + Send + Unpin + 'static> Handler<ExecuteBatch> for ExecutorA
                     let status = match fut.await {
                         Ok(s) => s,
                         Err(err) => {
-                            models::MonitorStatus {
+                            MonitorStatus {
                                 monitor_name,
                                 monitor_type,
-                                status: models::MonitorStatusIndicator::DOWN,
+                                status: MonitorStatusIndicator::DOWN,
                                 status_id,
                                 timestamp,
                                 expires_at: timestamp + chrono::Duration::days(1), // TODO
@@ -143,6 +143,6 @@ impl<M: Monitoring + Send + Unpin + 'static> Handler<ExecuteBatch> for ExecutorA
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct StatusMsg {
-    pub monitor: models::Monitor,
-    pub status: models::MonitorStatus,
+    pub monitor: Monitor,
+    pub status: MonitorStatus,
 }

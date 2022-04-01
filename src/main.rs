@@ -36,7 +36,7 @@ mod config;
 mod error;
 mod http;
 mod monitoring;
-mod openapi_client;
+//mod openapi_client;
 
 use crate::actix::Actor;
 use crate::actors::*;

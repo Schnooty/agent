@@ -1,7 +1,7 @@
 use crate::actors::TimerActor;
 use crate::actors::*;
 use crate::error::Error;
-use crate::openapi_client::models;
+use crate::config::Monitor;
 use actix::clock::Instant;
 use log::*;
 use std::collections::HashMap;
@@ -15,7 +15,7 @@ pub struct SchedulerActor {
 
 struct MonitorContainer {
     //uid: String,
-    monitor: models::Monitor,
+    monitor: Monitor,
 }
 
 impl Actor for SchedulerActor {
@@ -41,7 +41,7 @@ impl SchedulerActor {
 pub struct MonitorUpdate {
     /// Uniquely identifies this set of monitors
     pub source_id: String,
-    pub monitor: models::Monitor,
+    pub monitor: Monitor,
 }
 
 impl Handler<MonitorUpdate> for SchedulerActor {
@@ -104,7 +104,7 @@ impl Handler<Timeout> for SchedulerActor {
     }
 }
 
-fn get_duration(monitor: &models::Monitor) -> time::Duration {
+fn get_duration(monitor: &Monitor) -> time::Duration {
     let mut period_millis = to_milliseconds(&monitor.period);
     if period_millis <= 0 {
         warn!("Unusual period for monitor (id={:?})", monitor.id);

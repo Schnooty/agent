@@ -3,7 +3,8 @@ use crate::api::Api;
 use crate::api::{HttpApi, HttpConfig};
 use crate::config::Config;
 use crate::error::Error;
-use crate::openapi_client::models;
+//use crate::openapi_client::models;
+use crate::config;
 use actix::Context;
 use std::time::Duration;
 
@@ -18,7 +19,7 @@ pub struct SessionActor {
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct SessionInfoMsg {
-    pub session: models::Session,
+    pub session: config::Session,
 }
 
 #[derive(Clone, Debug, Message)]

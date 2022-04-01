@@ -1,7 +1,7 @@
 use crate::actors::*;
 use crate::alerts::*;
 use crate::error::Error;
-use crate::openapi_client::models;
+use crate::config;
 use chrono::offset::Utc;
 use chrono::DateTime;
 use hostname::get as get_hostname;
